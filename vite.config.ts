@@ -9,6 +9,9 @@ const __dirname = path.dirname(__filename)
 
 export default defineConfig({
     base: '/Park85/',
+    build: {
+        outDir: 'docs',
+    },
     plugins: [
         react(),
         tailwindcss(),
@@ -18,5 +21,4 @@ export default defineConfig({
             '@': path.resolve(__dirname, './src'),
         },
     },
-
 })
