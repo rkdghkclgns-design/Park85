@@ -1,0 +1,9 @@
+src/components/figma/ImageWithFallback.tsx(17,14): error TS2322: Type '{ crossOrigin?: CrossOrigin; decoding: "auto" | "async" | "sync"; fetchPriority?: "auto" | "high" | "low" | undefined; height?: string | number | undefined; loading: "lazy" | "eager"; ... 284 more ...; className: string; }' is not assignable to type 'Omit<HTMLMotionProps<"img">, "ref">'.
+  Types of property 'onDrag' are incompatible.
+    Type 'DragEventHandler<HTMLImageElement> | undefined' is not assignable to type '((event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => void) | undefined'.
+      Type 'DragEventHandler<HTMLImageElement>' is not assignable to type '(event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => void'.
+        Types of parameters 'event' and 'event' are incompatible.
+          Type 'MouseEvent | TouchEvent | PointerEvent' is not assignable to type 'DragEvent<HTMLImageElement>'.
+            Type 'MouseEvent' is missing the following properties from type 'DragEvent<HTMLImageElement>': dataTransfer, nativeEvent, isDefaultPrevented, isPropagationStopped, persist
+src/main.tsx(2,22): error TS7016: Could not find a declaration file for module 'react-dom/client'. 'C:/Users/KGA-유치훈/OneDrive/바탕 화면/유치훈/안티그래피티/안티그래피티/본연 리뉴얼/Park85_new/Park85/node_modules/react-dom/client.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-dom` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-dom/client';`

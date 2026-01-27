@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { motion } from "motion/react";
 
 interface ImageWithFallbackProps extends React.ImgHTMLAttributes<HTMLImageElement> {
@@ -25,7 +25,7 @@ export function ImageWithFallback({ src, alt, className, fallbackSrc = "https://
                     setImgSrc(fallbackSrc);
                     setIsLoading(false);
                 }}
-                {...props}
+                {...(props as any)}
             />
         </div>
     );
