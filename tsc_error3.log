@@ -1,7 +1,0 @@
-src/components/figma/ImageWithFallback.tsx(17,14): error TS2322: Type '{ crossOrigin?: CrossOrigin; decoding: "auto" | "async" | "sync"; fetchPriority?: "auto" | "high" | "low" | undefined; height?: string | number | undefined; loading: "lazy" | "eager"; ... 284 more ...; className: string; }' is not assignable to type 'Omit<HTMLMotionProps<"img">, "ref">'.
-  Types of property 'onDrag' are incompatible.
-    Type 'DragEventHandler<HTMLImageElement> | undefined' is not assignable to type '((event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => void) | undefined'.
-      Type 'DragEventHandler<HTMLImageElement>' is not assignable to type '(event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => void'.
-        Types of parameters 'event' and 'event' are incompatible.
-          Type 'MouseEvent | TouchEvent | PointerEvent' is not assignable to type 'DragEvent<HTMLImageElement>'.
-            Type 'MouseEvent' is missing the following properties from type 'DragEvent<HTMLImageElement>': dataTransfer, nativeEvent, isDefaultPrevented, isPropagationStopped, persist

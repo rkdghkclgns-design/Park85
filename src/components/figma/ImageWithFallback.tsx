@@ -1,11 +1,14 @@
-import React, { useState } from "react";
-import { motion } from "motion/react";
+import { useState } from "react";
+import { motion, type HTMLMotionProps } from "motion/react";
 
-interface ImageWithFallbackProps extends React.ImgHTMLAttributes<HTMLImageElement> {
+interface ImageWithFallbackProps {
+    src?: string;
+    alt?: string;
+    className?: string;
     fallbackSrc?: string;
 }
 
-export function ImageWithFallback({ src, alt, className, fallbackSrc = "https://placehold.co/600x400?text=No+Image", ...props }: ImageWithFallbackProps) {
+export function ImageWithFallback({ src, alt, className, fallbackSrc = "https://placehold.co/600x400?text=No+Image" }: ImageWithFallbackProps) {
     const [imgSrc, setImgSrc] = useState(src);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -25,7 +28,6 @@ export function ImageWithFallback({ src, alt, className, fallbackSrc = "https://
                     setImgSrc(fallbackSrc);
                     setIsLoading(false);
                 }}
-                {...(props as any)}
             />
         </div>
     );
