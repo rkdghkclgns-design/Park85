@@ -1,5 +1,4 @@
 import { Header } from "./components/Header";
-import { QuickQuote } from "./components/QuickQuote";
 import { Hero } from "./components/Hero";
 import { Features } from "./components/Features";
 import { Services } from "./components/Services";
@@ -16,9 +15,6 @@ export default function App() {
     return (
         <div className="min-h-screen bg-white">
             <Header />
-            <div className="pt-48"> {/* Add padding top to account for fixed header if needed, or place QuickQuote appropriately */}
-                <QuickQuote />
-            </div>
             <Hero />
             <Services />
             <ServiceSelection />
