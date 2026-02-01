@@ -2,10 +2,12 @@ import { useState, useEffect } from "react";
 import { Menu, X, ChevronDown } from "lucide-react";
 import { Button } from "./ui/button";
 import { motion, AnimatePresence } from "motion/react";
+import { useCartStore } from "../store/cartStore";
 
 export function Header() {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isScrolled, setIsScrolled] = useState(false);
+    const { setIsOpen } = useCartStore();
 
     useEffect(() => {
         const handleScroll = () => {
@@ -49,6 +51,12 @@ export function Header() {
                                 <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-600 transition-all duration-300 group-hover:w-full"></span>
                             </motion.a>
                         ))}
+                        <Button
+                            onClick={() => setIsOpen(true)}
+                            className="bg-[#1e2b4f] hover:bg-[#151f3a] text-white px-6 py-2 rounded-lg font-medium transition-colors"
+                        >
+                            간편 상담
+                        </Button>
                     </nav>
 
 

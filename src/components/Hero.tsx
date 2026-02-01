@@ -3,13 +3,14 @@ import { motion, AnimatePresence } from "motion/react";
 import { Button } from "./ui/button";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { ArrowRight, Play } from "lucide-react";
+import { useCartStore } from "../store/cartStore";
 
 export function Hero() {
+    const { setIsOpen } = useCartStore();
     const [currentImage, setCurrentImage] = useState(0);
     const images = [
         "./assets/cleaning_slide_1.jpg",
         "./assets/cleaning_slide_2.jpg",
-        "./assets/cleaning_slide_3.jpg",
         "./assets/cleaning_slide_4.jpg",
         "./assets/cleaning_slide_5.jpg"
     ];
@@ -89,22 +90,12 @@ export function Hero() {
                                     whileHover={{ scale: 1.05, boxShadow: "0 20px 40px rgba(0,0,0,0.2)" }}
                                     whileTap={{ scale: 0.95 }}
                                 >
-                                    <Button className="bg-white text-blue-600 hover:bg-gray-100 px-10 py-7 text-lg rounded-full shadow-2xl group">
+                                    <Button
+                                        onClick={() => setIsOpen(true)}
+                                        className="bg-white text-blue-600 hover:bg-gray-100 px-10 py-7 text-lg rounded-full shadow-2xl group"
+                                    >
                                         무료 상담 받기
                                         <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                                    </Button>
-                                </motion.div>
-
-                                <motion.div
-                                    whileHover={{ scale: 1.05 }}
-                                    whileTap={{ scale: 0.95 }}
-                                >
-                                    <Button
-                                        variant="outline"
-                                        className="border-2 border-white text-white hover:bg-white hover:text-blue-600 px-10 py-7 text-lg rounded-full backdrop-blur-sm bg-white/10 group"
-                                    >
-                                        <Play className="mr-2 w-5 h-5 group-hover:scale-110 transition-transform" />
-                                        영상 보기
                                     </Button>
                                 </motion.div>
                             </div>

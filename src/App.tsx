@@ -20,13 +20,13 @@ export default function App() {
                 <QuickQuote />
             </div>
             <Hero />
-            <Features />
             <Services />
-            <EventBanners />
             <ServiceSelection />
             <SuitableSpaces />
             <HowItWorks />
+            <Features />
             <Testimonials />
+            <EventBanners />
             <CTA />
             <Footer />
             <CartDrawer />

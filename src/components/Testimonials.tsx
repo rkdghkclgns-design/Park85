@@ -28,14 +28,14 @@ const testimonials = [
     {
         name: "최태영",
         role: "대학생",
-        image: "./assets/clients/client_4.png",
+        image: "./assets/clients/client_student.png",
         rating: 5,
         text: "학생 할인도 있고 가격도 합리적이에요. 기숙사 생활하면서 청소 스트레스가 없어졌어요.",
     },
     {
         name: "정하은",
         role: "간호사",
-        image: "./assets/clients/client_5.png",
+        image: "./assets/clients/client_nurse.png",
         rating: 5,
         text: "야근이 많아 청소할 시간이 없었는데 정말 편리합니다. 늦은 시간에도 관리 가능해서 감사해요!",
         featured: true,
@@ -43,7 +43,7 @@ const testimonials = [
     {
         name: "강동훈",
         role: "사업가",
-        image: "./assets/clients/client_6.png",
+        image: "./assets/clients/client_owner.png",
         rating: 5,
         text: "사무실 청소를 맡기는데 항상 새것처럼 깨끗해요. 프리미엄 서비스가 가격 대비 정말 만족스럽습니다.",
     },
