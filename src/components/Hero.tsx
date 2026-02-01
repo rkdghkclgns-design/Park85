@@ -75,14 +75,14 @@ export function Hero() {
                             </motion.span>
 
                             <h1 className="text-5xl md:text-6xl lg:text-7xl text-white mb-6 leading-tight">
-                                당신의 시간을
+                                <span className="text-yellow-300">본연</span>의 모습을
                                 <br />
-                                <span className="text-yellow-300">되찾아</span> 드립니다
+                                되찾아드립니다
                             </h1>
 
                             <p className="text-xl text-white/90 mb-10 leading-relaxed max-w-xl">
-                                언제 어디서나 정기적 관리를 통해
-                                쾌적하고 전문적인 서비스를 만나보세요.
+                                전문적인 기술과 장비로
+                                최고의 서비스를 제공합니다.
                             </p>
 
                             <div className="flex flex-col sm:flex-row gap-4 mb-12">
