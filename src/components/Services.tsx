@@ -3,24 +3,24 @@ import { ImageWithFallback } from "./figma/ImageWithFallback";
 
 const services = [
     {
-        title: "상업공간, 사무실 청소",
-        description: "사무실 등 상업공간 전반의 정기/일회성/특수 청소 서비스 제공",
-        image: "https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=2070&auto=format&fit=crop", // Modern office
+        title: "정기 청소",
+        description: "사무실, 병원 등 상업공간 전반의 정기 청소 서비스 제공",
+        image: "https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=2070&auto=format&fit=crop",
     },
     {
-        title: "건물관리",
-        description: "임대료 관리, 번거로운 민원처리까지 건물에 필요한 모든 관리포인트 해결",
-        image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=2070&auto=format&fit=crop", // Building exterior
+        title: "정기 소독&방역",
+        description: "어린이집, 학원 등 상업공간 전반의 정치 소독 및 방역 서비스 제공",
+        image: "https://images.unsplash.com/photo-1584820927498-cfe5211fd8bf?q=80&w=2070&auto=format&fit=crop",
     },
     {
-        title: "스낵 및 비품관리",
-        description: "사무실 간식, 비품, 큐레이션 서비스. 다양한 기업의 복지 예산에 맞춰 세팅",
-        image: "https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=2074&auto=format&fit=crop", // Market/Snacks
+        title: "딥 클리닝",
+        description: "준공 청소, 냉난방 공조기 등 일회성 서비스 제공",
+        image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?q=80&w=2070&auto=format&fit=crop",
     },
     {
-        title: "호텔관리",
-        description: "객실관리, 미화, 리브랑 등 호텔에 필요한 인비지블 서비스 제공",
-        image: "https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=2070&auto=format&fit=crop", // Hotel luxury
+        title: "건물 관리",
+        description: "건물 외벽, 창문, 간판, LED 보수 및 청소 서비스 제공",
+        image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=2070&auto=format&fit=crop",
     },
 ];
 

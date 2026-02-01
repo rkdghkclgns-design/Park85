@@ -73,47 +73,30 @@ export function HowItWorks() {
                     </div>
 
                     <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 relative text-center">
-                        {steps.map((step, index) => (
+                        {[
+                            { step: "STEP 01", title: "서비스 신청", desc: "온라인/전화 간편 상담 신청", icon: Calendar, color: "from-blue-500 to-blue-600" },
+                            { step: "STEP 02", title: "일정 확정", desc: "전문 매니저의 해피콜 및 일정 조율", icon: Package, color: "from-purple-500 to-purple-600" },
+                            { step: "STEP 03", title: "서비스 진행", desc: "전문가 방문 및 맞춤형 케어 진행", icon: Sparkles, color: "from-green-500 to-green-600" },
+                            { step: "STEP 04", title: "결제 및 사후관리", desc: "서비스 완료 확인 및 만족도 조사", icon: Home, color: "from-orange-500 to-orange-600" },
+                        ].map((item, index) => (
                             <motion.div
-                                key={step.title}
+                                key={item.step}
                                 initial={{ opacity: 0, y: 30 }}
                                 whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true }}
                                 transition={{ duration: 0.6, delay: index * 0.15 }}
                                 className="relative flex flex-col items-center"
                             >
-                                <motion.div
-                                    whileHover={{ scale: 1.05, y: -10 }}
-                                    className="bg-white rounded-3xl p-8 flex flex-col items-center h-full w-full relative z-10 shadow-lg hover:shadow-2xl transition-all border border-gray-100"
-                                >
-                                    {/* Step Number Badge */}
-                                    <motion.div
-                                        initial={{ scale: 0 }}
-                                        whileInView={{ scale: 1 }}
-                                        viewport={{ once: true }}
-                                        transition={{ duration: 0.5, delay: index * 0.15 + 0.3, type: "spring" }}
-                                        className={`absolute -top-6 left-1/2 -translate-x-1/2 w-16 h-16 bg-gradient-to-br ${step.color} text-white rounded-2xl flex items-center justify-center text-2xl font-bold shadow-lg rotate-12 hover:rotate-0 transition-transform`}
-                                    >
-                                        {step.step}
-                                    </motion.div>
+                                <div className="bg-white rounded-2xl p-8 w-full h-full shadow-lg border border-gray-100 flex flex-col items-center">
+                                    <span className="text-blue-600 font-bold mb-4 tracking-widest">{item.step}</span>
 
-                                    {/* Icon */}
-                                    <motion.div
-                                        whileHover={{ rotate: 360 }}
-                                        transition={{ duration: 0.6 }}
-                                        className={`inline-flex p-6 bg-gradient-to-br ${step.color} rounded-3xl mb-6 mt-8 shadow-xl`}
-                                    >
-                                        <step.icon className="w-10 h-10 text-white" />
-                                    </motion.div>
+                                    <div className={`p-4 rounded-2xl bg-gradient-to-br ${item.color} mb-6 shadow-md`}>
+                                        <item.icon className="w-8 h-8 text-white" />
+                                    </div>
 
-                                    {/* Content */}
-                                    <h3 className="text-2xl font-bold text-gray-900 mb-4 whitespace-nowrap">
-                                        {step.title}
-                                    </h3>
-                                    <p className="text-gray-600 leading-relaxed break-keep">
-                                        {step.description}
-                                    </p>
-                                </motion.div>
+                                    <h3 className="text-xl font-bold text-gray-900 mb-2">{item.title}</h3>
+                                    <p className="text-gray-500 text-sm break-keep">{item.desc}</p>
+                                </div>
                             </motion.div>
                         ))}
                     </div>

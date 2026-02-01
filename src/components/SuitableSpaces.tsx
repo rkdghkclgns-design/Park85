@@ -1,15 +1,20 @@
 import { motion } from "motion/react";
-import { Building2, Building, Stethoscope, GraduationCap, Coffee, Hotel, Utensils, GalleryVerticalEnd, Store } from "lucide-react";
+import { Building2, Building, Stethoscope, GraduationCap, Coffee, Hotel, Utensils, GalleryVerticalEnd, Store, Baby, Home, School, Landmark, TreePine, Dumbbell } from "lucide-react";
 
 const spaces = [
     { name: "사무실", icon: Building2 },
-    { name: "빌딩", icon: Building },
     { name: "병원", icon: Stethoscope },
     { name: "학원", icon: GraduationCap },
+    { name: "어린이집", icon: Baby },
     { name: "카페", icon: Coffee },
     { name: "호텔", icon: Hotel },
     { name: "주방", icon: Utensils },
     { name: "전시장", icon: GalleryVerticalEnd },
+    { name: "펜션", icon: Home },
+    { name: "학교", icon: School },
+    { name: "관공서", icon: Landmark },
+    { name: "실외 놀이터", icon: TreePine },
+    { name: "피트니스", icon: Dumbbell },
     { name: "상업공간", icon: Store },
 ];
 

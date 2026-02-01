@@ -1,32 +1,34 @@
 import { motion } from "motion/react";
 import { Clock, Shield, Leaf, Truck } from "lucide-react";
 
+
 const features = [
     {
         icon: Clock,
-        title: "24시간 특급 서비스",
-        description: "어떤 의뢰도 24시간 내 처리",
+        title: "24시간 항시 대기",
+        description: "고객님의 편한 시간 언제든지 24시간 상담 가능합니다.",
         color: "from-blue-500 to-blue-600",
     },
     {
         icon: Shield,
         title: "100% 만족 보장",
-        description: "품질과 타협하지 않음",
+        description: "본연의 임무를 다하여 품질과 시간에 타협하지 않습니다.",
         color: "from-purple-500 to-purple-600",
     },
     {
         icon: Leaf,
-        title: "전문적인 고급 친환경 제품사용",
-        description: "청결과 환경을 함께 생각함",
+        title: "전문적인 고급 친환경 제품 사용",
+        description: "고객님과 방문객 모두를 위하여 친환경 제품을 우선합니다.",
         color: "from-green-500 to-green-600",
     },
     {
         icon: Truck,
-        title: "빠른 방문 확인",
-        description: "원하시는 시간과 장소로 빠른 케어 서비스",
+        title: "방문 상담",
+        description: "원하시는 시간과 장소로 방문하여 정확한 솔루션을 제공합니다.",
         color: "from-orange-500 to-orange-600",
     },
 ];
+
 
 export function Features() {
     return (

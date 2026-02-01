@@ -10,6 +10,7 @@ import { Testimonials } from "./components/Testimonials";
 import { CTA } from "./components/CTA";
 import { Footer } from "./components/Footer";
 import { CartDrawer } from "./components/CartDrawer";
+import { ClientLogos } from "./components/ClientLogos";
 
 export default function App() {
     return (
@@ -19,6 +20,7 @@ export default function App() {
             <Services />
             <ServiceSelection />
             <SuitableSpaces />
+            <ClientLogos />
             <HowItWorks />
             <Features />
             <Testimonials />
