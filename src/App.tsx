@@ -11,6 +11,7 @@ import { CTA } from "./components/CTA";
 import { Footer } from "./components/Footer";
 import { CartDrawer } from "./components/CartDrawer";
 import { ClientLogos } from "./components/ClientLogos";
+import { ScrollToTop } from "./components/ScrollToTop";
 
 export default function App() {
     return (
@@ -28,6 +29,7 @@ export default function App() {
             <CTA />
             <Footer />
             <CartDrawer />
+            <ScrollToTop />
         </div>
     );
 }
