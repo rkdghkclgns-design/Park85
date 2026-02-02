@@ -115,27 +115,27 @@ export function Footer() {
                             <li className="flex items-start gap-3">
                                 <MapPin className="w-5 h-5 mt-1 flex-shrink-0 text-blue-400" />
                                 <span className="leading-relaxed">
-                                    인천광역시 서구 한들로 100
+                                    경기도 포천시 영북면 북원로 254-15, 1층
                                 </span>
                             </li>
                             <li className="flex items-center gap-3">
                                 <Phone className="w-5 h-5 flex-shrink-0 text-blue-400" />
                                 <motion.a
-                                    href="tel:18001234"
+                                    href="tel:01027401734"
                                     whileHover={{ scale: 1.05, color: "#3B82F6" }}
                                     className="hover:text-blue-400 transition-all"
                                 >
-                                    1800-1234
+                                    010-2740-1734
                                 </motion.a>
                             </li>
                             <li className="flex items-center gap-3">
                                 <Mail className="w-5 h-5 flex-shrink-0 text-blue-400" />
                                 <motion.a
-                                    href="mailto:help@cnaver.com"
+                                    href="mailto:bonyeon.cs@gmail.com"
                                     whileHover={{ scale: 1.05, color: "#3B82F6" }}
                                     className="hover:text-blue-400 transition-all"
                                 >
-                                    help@cnaver.com
+                                    bonyeon.cs@gmail.com
                                 </motion.a>
                             </li>
                         </ul>
@@ -160,7 +160,6 @@ export function Footer() {
                         {[
                             { icon: "🏆", title: "품질인증", subtitle: "ISO 9001" },
                             { icon: "🌿", title: "친환경인증", subtitle: "Green Clean" },
-                            { icon: "🔒", title: "정보보호", subtitle: "ISMS 인증" },
                             { icon: "⭐", title: "우수기업", subtitle: "Best Award" },
                         ].map((cert, idx) => (
                             <motion.div
@@ -181,9 +180,9 @@ export function Footer() {
                     <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                         <div className="text-gray-400 text-sm">
                             <p className="mb-2">
-                                <span className="text-white">본연</span> | 대표이사: 홍길동 | 사업자등록번호: 123-45-67890
+                                <span className="text-white">본연</span> | 대표자: 박해담 | 사업자등록번호: 166-19-02708
                             </p>
-                            <p>통신판매업신고: 2024-서울강남-12345 | 개인정보보호책임자: 김세탁</p>
+                            <p>주소: 경기도 포천시 영북면 북원로 254-15, 1층</p>
                         </div>
                     </div>
 

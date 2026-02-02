@@ -27,13 +27,13 @@ export function ClientLogos() {
 
     return (
         <section className="py-16 bg-gray-50 overflow-hidden">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-10 text-center">
-                <h3 className="text-xl font-bold text-gray-500 tracking-widest uppercase">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-16 text-center">
+                <h2 className="text-3xl md:text-4xl font-bold text-gray-900">
                     함께하는 고객
-                </h3>
+                </h2>
             </div>
 
-            <div className="relative flex overflow-x-hidden group">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative flex overflow-x-hidden group">
                 <div className="flex animate-marquee whitespace-nowrap py-4">
                     {[...randomizedClients, ...randomizedClients].map((client, index) => (
                         <div

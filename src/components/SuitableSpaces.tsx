@@ -35,18 +35,24 @@ export function SuitableSpaces() {
                 </h2>
             </div>
 
-            <div className="relative flex overflow-x-hidden group">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative flex overflow-x-hidden group">
                 <div className="flex animate-marquee whitespace-nowrap py-4">
                     {[...spaces, ...spaces].map((space, index) => (
-                        <div
+                        <motion.div
                             key={`${space.name}-${index}`}
-                            className="flex-none w-[50vw] sm:w-[33.33vw] md:w-[25vw] lg:w-[14.2857vw] xl:w-[182.85px] px-4 flex flex-col items-center gap-4 group"
+                            className="flex-none w-[50vw] sm:w-[33.33vw] md:w-[25vw] lg:w-[14.2857vw] xl:w-[182.85px] px-4 group"
+                            whileHover={{ y: -5, scale: 1.02 }}
                         >
-                            <div className="w-20 h-20 bg-blue-50 rounded-2xl flex items-center justify-center group-hover:bg-blue-100 transition-colors shadow-sm mx-auto">
-                                <space.icon className="w-10 h-10 text-blue-300 group-hover:text-blue-500 transition-colors" strokeWidth={1.5} />
+                            <div className="flex flex-col items-center justify-center p-6 bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-50 h-full relative overflow-hidden">
+                                <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4 group-hover:bg-blue-100 transition-colors">
+                                    <space.icon className="w-8 h-8 text-blue-500" strokeWidth={1.5} />
+                                </div>
+                                <span className="font-bold text-gray-900 text-lg">{space.name}</span>
+
+                                {/* Hover Effect Line */}
+                                <div className="absolute bottom-0 left-0 w-0 h-1 bg-gradient-to-r from-blue-500 to-purple-500 group-hover:w-full transition-all duration-500"></div>
                             </div>
-                            <span className="font-bold text-gray-900 text-lg">{space.name}</span>
-                        </div>
+                        </motion.div>
                     ))}
                 </div>
             </div>
