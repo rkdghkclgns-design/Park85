@@ -69,7 +69,7 @@ export function Features() {
                             whileHover={{ y: -10, scale: 1.02 }}
                             className="group relative"
                         >
-                            <div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-100 h-full">
+                            <div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-100 h-full flex flex-col items-center text-center">
                                 {/* Icon Container with Gradient */}
                                 <motion.div
                                     whileHover={{ rotate: 360, scale: 1.1 }}
