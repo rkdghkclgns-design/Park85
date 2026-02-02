@@ -34,19 +34,21 @@ export function ClientLogos() {
             </div>
 
             <div className="relative flex overflow-x-hidden group">
-                <div className="flex animate-marquee whitespace-nowrap gap-8 py-4">
+                <div className="flex animate-marquee whitespace-nowrap py-4">
                     {[...randomizedClients, ...randomizedClients].map((client, index) => (
                         <div
                             key={`${client.name}-${index}`}
-                            className="flex flex-col items-center justify-center p-6 bg-white rounded-2xl shadow-sm border border-gray-100 min-w-[160px] h-40 mx-4 hover:shadow-md transition-shadow"
+                            className="flex-none w-[50vw] sm:w-[33.33vw] md:w-[25vw] lg:w-[14.2857vw] xl:w-[182.85px] px-4"
                         >
-                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4 text-gray-400">
-                                {/* Placeholder for actual logo */}
-                                <Building2 size={24} />
+                            <div className="flex flex-col items-center justify-center p-6 bg-white rounded-2xl shadow-sm border border-gray-100 w-full h-40 hover:shadow-md transition-shadow">
+                                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4 text-gray-400">
+                                    {/* Placeholder for actual logo */}
+                                    <Building2 size={24} />
+                                </div>
+                                <span className="font-bold text-gray-700 text-sm whitespace-normal text-center line-clamp-2">
+                                    {client.name}
+                                </span>
                             </div>
-                            <span className="font-bold text-gray-700 text-sm whitespace-normal text-center line-clamp-2">
-                                {client.name}
-                            </span>
                         </div>
                     ))}
                 </div>

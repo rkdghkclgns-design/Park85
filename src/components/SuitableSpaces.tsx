@@ -36,13 +36,13 @@ export function SuitableSpaces() {
             </div>
 
             <div className="relative flex overflow-x-hidden group">
-                <div className="flex animate-marquee whitespace-nowrap gap-8 py-4 px-4">
+                <div className="flex animate-marquee whitespace-nowrap py-4">
                     {[...spaces, ...spaces].map((space, index) => (
                         <div
                             key={`${space.name}-${index}`}
-                            className="flex flex-col items-center gap-4 group min-w-[120px]"
+                            className="flex-none w-[50vw] sm:w-[33.33vw] md:w-[25vw] lg:w-[14.2857vw] xl:w-[182.85px] px-4 flex flex-col items-center gap-4 group"
                         >
-                            <div className="w-20 h-20 bg-blue-50 rounded-2xl flex items-center justify-center group-hover:bg-blue-100 transition-colors shadow-sm">
+                            <div className="w-20 h-20 bg-blue-50 rounded-2xl flex items-center justify-center group-hover:bg-blue-100 transition-colors shadow-sm mx-auto">
                                 <space.icon className="w-10 h-10 text-blue-300 group-hover:text-blue-500 transition-colors" strokeWidth={1.5} />
                             </div>
                             <span className="font-bold text-gray-900 text-lg">{space.name}</span>
