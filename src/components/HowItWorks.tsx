@@ -87,7 +87,7 @@ export function HowItWorks() {
                                 transition={{ duration: 0.6, delay: index * 0.15 }}
                                 className="relative flex flex-col items-center"
                             >
-                                <div className="bg-white rounded-2xl p-8 w-full h-full shadow-lg border border-gray-100 flex flex-col items-center">
+                                <div className="bg-white rounded-2xl p-8 w-full h-full shadow-lg border border-gray-100 flex flex-col items-center text-center">
                                     <span className="text-blue-600 font-bold mb-4 tracking-widest">{item.step}</span>
 
                                     <div className={`p-4 rounded-2xl bg-gradient-to-br ${item.color} mb-6 shadow-md`}>
