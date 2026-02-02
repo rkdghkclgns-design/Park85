@@ -93,7 +93,32 @@ export async function submitConsultation(data: ConsultationRequest): Promise<{
             existing.push(requestData);
             localStorage.setItem("consultations", JSON.stringify(existing));
             console.log("Consultation saved to localStorage:", requestData);
-            return { success: true, message: "상담 신청이 접수되었습니다. (개발 모드)" };
+
+            // Trigger Mailto for immediate notification (Client-side)
+            const subject = `[상담신청] ${data.name}님 견적 상담 요청`;
+            const body = `
+[견적 상담 요청]
+
+1. 신청인 정보
+- 성함: ${data.name}
+- 연락처: ${data.contact}
+- 주소: ${data.address}
+
+2. 건물 정보
+- 유형: ${data.buildingType}
+- 평수: ${data.area}
+
+3. 신청 서비스
+${data.services.length > 0 ? data.services.map(s => `- ${s}`).join("\n") : "- 선택 안 함"}
+
+--------------------------------------------------
+작성일: ${new Date().toLocaleString()}
+            `.trim();
+
+            const mailtoLink = `mailto:bonyeon.cs@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            window.location.href = mailtoLink;
+
+            return { success: true, message: "이메일 발송 창이 열립니다. 내용을 확인 후 전송해주세요." };
         } catch (error) {
             console.error("Local storage failed:", error);
         }
