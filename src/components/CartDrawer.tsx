@@ -15,7 +15,8 @@ export function CartDrawer() {
         area: "",
         address: "",
         contact: "",
-        name: ""
+        name: "",
+        visitType: ""
     });
 
     // Check if a service is selected
@@ -65,7 +66,8 @@ export function CartDrawer() {
                     area: "",
                     address: "",
                     contact: "",
-                    name: ""
+                    name: "",
+                    visitType: ""
                 });
             } else {
                 alert(`❌ ${result.message}`);
@@ -211,6 +213,24 @@ export function CartDrawer() {
                                         </div>
                                     </div>
 
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-semibold text-gray-600">거래 여부 <span className="text-red-500">*</span></label>
+                                        <div className="relative">
+                                            <Check className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                                            <select
+                                                name="visitType"
+                                                value={formData.visitType}
+                                                onChange={handleInputChange}
+                                                required
+                                                className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                            >
+                                                <option value="">선택해주세요</option>
+                                                <option value="첫 거래">첫 거래입니다</option>
+                                                <option value="기존 고객">기존 고객입니다</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-1">
                                             <label className="text-xs font-semibold text-gray-600">담당자 성함 <span className="text-red-500">*</span></label>
@@ -255,9 +275,9 @@ export function CartDrawer() {
                                 type="submit"
                                 form="consultation-form"
                                 className="w-full h-14 text-lg font-bold bg-[#1e2b4f] hover:bg-[#151f3a] shadow-lg disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none disabled:cursor-not-allowed group transition-all"
-                                disabled={!formData.buildingType || !formData.area || !formData.address || !formData.name || !formData.contact}
+                                disabled={!formData.buildingType || !formData.area || !formData.address || !formData.name || !formData.contact || !formData.visitType}
                             >
-                                {(!formData.buildingType || !formData.area || !formData.address || !formData.name || !formData.contact) ? (
+                                {(!formData.buildingType || !formData.area || !formData.address || !formData.name || !formData.contact || !formData.visitType) ? (
                                     <span className="mr-2">🔒</span>
                                 ) : (
                                     <Send className="mr-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />

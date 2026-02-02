@@ -85,10 +85,6 @@ export function Footer() {
                             {[
                                 "자주 묻는 질문",
                                 "이용 가이드",
-                                "서비스 지역",
-                                "제휴 문의",
-                                "개인정보처리방침",
-                                "이용약관",
                             ].map((link, idx) => (
                                 <li key={link}>
                                     <motion.a
@@ -156,10 +152,10 @@ export function Footer() {
                     transition={{ duration: 0.6, delay: 0.5 }}
                     className="border-t border-gray-800 pt-8 mb-8"
                 >
-                    <div className="grid md:grid-cols-4 gap-6 text-center">
+                    <div className="grid md:grid-cols-3 gap-6 text-center max-w-4xl mx-auto">
                         {[
-                            { icon: "🏆", title: "품질인증", subtitle: "ISO 9001" },
-                            { icon: "🌿", title: "친환경인증", subtitle: "Green Clean" },
+                            { icon: "🏆", title: "품질경영", subtitle: "ISO 9001" },
+                            { icon: "🌿", title: "친환경 크리닝", subtitle: "Green Clean" },
                             { icon: "⭐", title: "우수기업", subtitle: "Best Award" },
                         ].map((cert, idx) => (
                             <motion.div
@@ -177,7 +173,7 @@ export function Footer() {
 
                 {/* Bottom Bar */}
                 <div className="border-t border-gray-800 pt-8">
-                    <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div className="flex flex-col items-center gap-4 text-center">
                         <div className="text-gray-400 text-sm">
                             <p className="mb-2">
                                 <span className="text-white">본연</span> | 대표자: 박해담 | 사업자등록번호: 166-19-02708

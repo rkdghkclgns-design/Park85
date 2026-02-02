@@ -7,6 +7,7 @@ export interface ConsultationRequest {
     address: string;
     contact: string;
     name: string;
+    visitType: string;
     services: string[];
     submittedAt: string;
 }
@@ -107,6 +108,7 @@ export async function submitConsultation(data: ConsultationRequest): Promise<{
 2. 건물 정보
 - 유형: ${data.buildingType}
 - 평수: ${data.area}
+- 거래 여부: ${data.visitType}
 
 3. 신청 서비스
 ${data.services.length > 0 ? data.services.map(s => `- ${s}`).join("\n") : "- 선택 안 함"}

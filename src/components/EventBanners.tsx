@@ -19,8 +19,7 @@ export function EventBanners() {
                     </div>
                     <div className="relative z-10 flex items-center gap-6">
                         <div className="text-right hidden md:block">
-                            <div className="text-gray-400 text-sm mb-1">연간 계약 혜택</div>
-                            <div className="text-4xl font-bold text-white">FREE</div>
+                            {/* Removed text as per request */}
                         </div>
                         <div className="text-white bg-white/10 p-4 rounded-full">
                             <ArrowRight className="w-8 h-8 md:w-12 md:h-12" />
