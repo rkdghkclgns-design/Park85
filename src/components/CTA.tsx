@@ -136,7 +136,7 @@ export function CTA() {
                         {
                             icon: Mail,
                             title: "이메일 문의",
-                            content: "help@cnaver.com",
+                            content: "bonyeon.cs@gmail.com",
                             description: "24시간 내 답변",
                             gradient: "from-purple-500 to-purple-600",
                         },

@@ -21,9 +21,6 @@ export function EventBanners() {
                         <div className="text-right hidden md:block">
                             {/* Removed text as per request */}
                         </div>
-                        <div className="text-white bg-white/10 p-4 rounded-full">
-                            <ArrowRight className="w-8 h-8 md:w-12 md:h-12" />
-                        </div>
                     </div>
                 </motion.div>
 

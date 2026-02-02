@@ -165,7 +165,6 @@ export function Footer() {
                             >
                                 <div className="text-3xl mb-2">{cert.icon}</div>
                                 <div className="text-white font-semibold">{cert.title}</div>
-                                <div className="text-sm text-gray-400">{cert.subtitle}</div>
                             </motion.div>
                         ))}
                     </div>

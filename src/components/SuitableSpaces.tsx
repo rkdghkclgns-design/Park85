@@ -35,7 +35,7 @@ export function SuitableSpaces() {
                 </h2>
             </div>
 
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative flex overflow-x-hidden group">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative flex overflow-x-hidden">
                 <div className="flex animate-marquee whitespace-nowrap py-4">
                     {[...spaces, ...spaces].map((space, index) => (
                         <motion.div
