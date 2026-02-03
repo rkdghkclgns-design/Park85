@@ -100,31 +100,7 @@ export function Hero() {
                                 </motion.div>
                             </div>
 
-                            {/* Stats */}
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.8, delay: 0.4 }}
-                                className="grid grid-cols-3 gap-8"
-                            >
-                                {[
-                                    { number: "15,000+", label: "만족스러운 고객" },
-                                    { number: "24시간", label: "빠른 처리" },
-                                    { number: "100%", label: "먼지 차단" },
-                                ].map((stat, idx) => (
-                                    <motion.div
-                                        key={stat.label}
-                                        initial={{ opacity: 0, scale: 0.8 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        transition={{ duration: 0.5, delay: 0.6 + idx * 0.1 }}
-                                    >
-                                        <div className="text-3xl md:text-4xl font-bold text-white mb-1">
-                                            {stat.number}
-                                        </div>
-                                        <div className="text-sm text-white/80">{stat.label}</div>
-                                    </motion.div>
-                                ))}
-                            </motion.div>
+
                         </motion.div>
                     </div>
 
