@@ -9,8 +9,8 @@ interface ImageWithFallbackProps {
 }
 
 export function ImageWithFallback({ src, alt, className, fallbackSrc = "https://placehold.co/600x400?text=No+Image" }: ImageWithFallbackProps) {
-    const [imgSrc, setImgSrc] = useState(src);
     const [isLoading, setIsLoading] = useState(true);
+    const [hasError, setHasError] = useState(false);
 
     return (
         <div className={`relative overflow-hidden ${className}`}>
@@ -18,14 +18,15 @@ export function ImageWithFallback({ src, alt, className, fallbackSrc = "https://
                 <div className="absolute inset-0 bg-gray-200 animate-pulse" />
             )}
             <motion.img
-                src={imgSrc}
+                key={src}
+                src={hasError ? fallbackSrc : src}
                 alt={alt || "이미지"}
                 loading="lazy"
                 decoding="async"
                 className={`w-full h-full object-cover transition-opacity duration-300 ${isLoading ? "opacity-0" : "opacity-100"}`}
                 onLoad={() => setIsLoading(false)}
                 onError={() => {
-                    setImgSrc(fallbackSrc);
+                    setHasError(true);
                     setIsLoading(false);
                 }}
             />
