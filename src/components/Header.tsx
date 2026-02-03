@@ -1,32 +1,16 @@
 import { useState, useEffect } from "react";
-import { Menu, X, ChevronDown } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { Button } from "./ui/button";
 import { motion, AnimatePresence } from "motion/react";
 import { useCartStore } from "../store/cartStore";
 
 export function Header() {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const [isVisible, setIsVisible] = useState(false);
-    const [isScrolled, setIsScrolled] = useState(false);
     const { setIsOpen } = useCartStore();
-
-    useEffect(() => {
-        const handleScroll = () => {
-            const heroHeight = window.innerHeight; // 동영상 화면 높이 (뷰포트 기준)
-            const scrollY = window.scrollY;
-
-            // 동영상의 1/4 정도 가려지면 (25% 스크롤) 헤더 표시
-            // 동영상이 3/4 이상 보이면 (25% 미만 스크롤) 헤더 숨김
-            setIsVisible(scrollY > heroHeight * 0.25);
-            setIsScrolled(scrollY > 20);
-        };
-        window.addEventListener("scroll", handleScroll);
-        return () => window.removeEventListener("scroll", handleScroll);
-    }, []);
 
     return (
         <header
-            className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled ? "bg-white/95 backdrop-blur-lg shadow-md" : "bg-transparent"}`}
+            className="fixed top-0 left-0 right-0 z-50 transition-all duration-300 bg-white/95 backdrop-blur-lg shadow-md"
         >
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex items-center justify-between h-20">
@@ -44,8 +28,7 @@ export function Header() {
                             <motion.a
                                 key={item}
                                 href={`#${["services", "how-it-works", "testimonials"][idx]}`}
-                                className={`text-base transition-colors relative group ${isScrolled ? "text-gray-700 hover:text-blue-600" : "text-gray-800 hover:text-blue-600"
-                                    }`}
+                                className="text-base transition-colors relative group text-gray-700 hover:text-blue-600"
                                 whileHover={{ y: -2 }}
                             >
                                 {item}
@@ -68,9 +51,9 @@ export function Header() {
                         onClick={() => setIsMenuOpen(!isMenuOpen)}
                     >
                         {isMenuOpen ? (
-                            <X className={`h-6 w-6 ${isScrolled ? "text-gray-900" : "text-gray-900"}`} />
+                            <X className="h-6 w-6 text-gray-900" />
                         ) : (
-                            <Menu className={`h-6 w-6 ${isScrolled ? "text-gray-900" : "text-gray-900"}`} />
+                            <Menu className="h-6 w-6 text-gray-900" />
                         )}
                     </button>
                 </div>

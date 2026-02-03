@@ -13,7 +13,7 @@ const testimonials = [
     {
         name: "스타트업 라운지",
         role: "경기 판교",
-        image: "./assets/clients/client_2.png",
+        image: "./assets/clients/client_2_new.png",
         rating: 5,
         text: "직원들이 출근할 때마다 상쾌함을 느낍니다. 정기 관리 덕분에 업무 효율도 오르는 것 같아요.",
     },
@@ -35,7 +35,7 @@ const testimonials = [
     {
         name: "더 피트니스",
         role: "경기 일산",
-        image: "./assets/clients/client_nurse.png",
+        image: "./assets/clients/client_fitness_new.png",
         rating: 5,
         text: "운동 기구 사이사이 먼지까지 꼼꼼하게 제거해주셔서 회원님들 만족도가 정말 높습니다.",
         featured: true,
@@ -43,7 +43,7 @@ const testimonials = [
     {
         name: "공유오피스 워크",
         role: "대전 서구",
-        image: "./assets/clients/client_owner.png",
+        image: "./assets/clients/client_owner_new.png",
         rating: 5,
         text: "다양한 사람들이 오가는 곳인데 화장실부터 회의실까지 항상 완벽하게 관리해주십니다.",
     },
