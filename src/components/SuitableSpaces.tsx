@@ -35,24 +35,26 @@ export function SuitableSpaces() {
                 </h2>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-                {spaces.map((space, index) => (
-                    <motion.div
-                        key={`${space.name}-${index}`}
-                        className="group"
-                        whileHover={{ y: -5, scale: 1.02 }}
-                    >
-                        <div className="flex flex-col items-center justify-center p-6 bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-50 h-full relative overflow-hidden aspect-square">
-                            <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4 group-hover:bg-blue-100 transition-colors">
-                                <space.icon className="w-8 h-8 text-blue-500" strokeWidth={1.5} />
-                            </div>
-                            <span className="font-bold text-gray-900 text-lg">{space.name}</span>
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                    {spaces.map((space, index) => (
+                        <motion.div
+                            key={`${space.name}-${index}`}
+                            className="group"
+                            whileHover={{ y: -5, scale: 1.02 }}
+                        >
+                            <div className="flex flex-col items-center justify-center p-6 bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-50 h-full relative overflow-hidden aspect-square">
+                                <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4 group-hover:bg-blue-100 transition-colors">
+                                    <space.icon className="w-8 h-8 text-blue-500" strokeWidth={1.5} />
+                                </div>
+                                <span className="font-bold text-gray-900 text-lg">{space.name}</span>
 
-                            {/* Hover Effect Line */}
-                            <div className="absolute bottom-0 left-0 w-0 h-1 bg-gradient-to-r from-blue-500 to-purple-500 group-hover:w-full transition-all duration-500"></div>
-                        </div>
-                    </motion.div>
-                ))}
+                                {/* Hover Effect Line */}
+                                <div className="absolute bottom-0 left-0 w-0 h-1 bg-gradient-to-r from-blue-500 to-purple-500 group-hover:w-full transition-all duration-500"></div>
+                            </div>
+                        </motion.div>
+                    ))}
+                </div>
             </div>
         </section>
     );
