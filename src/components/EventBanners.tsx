@@ -2,7 +2,6 @@ import { motion } from "motion/react";
 import { ArrowRight } from "lucide-react";
 
 export function EventBanners() {
-    console.log("REFINE_VERSION_V3");
     return (
         <section className="py-12 px-4 sm:px-6 lg:px-8 bg-white">
             <div className="max-w-7xl mx-auto space-y-8">
