@@ -10,15 +10,19 @@ export function EventBanners() {
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
-                    className="bg-[#1a233a] rounded-2xl p-8 md:px-12 relative overflow-hidden flex flex-col md:flex-row justify-between items-center h-72 md:h-96"
+                    className="bg-[#1a233a] rounded-2xl relative overflow-hidden flex flex-col md:flex-row justify-between items-center h-80 md:h-[400px]"
                 >
-                    <div className="relative z-10 w-full md:w-2/5">
+                    <div className="relative z-10 w-full md:w-1/2 p-8 md:pl-12">
                         <span className="inline-block bg-blue-500 text-white px-3 py-1 rounded-full text-sm font-bold mb-4">EVENT 01</span>
                         <h3 className="text-2xl md:text-4xl font-bold mb-4 text-white">정기 청소 이벤트</h3>
                         <p className="text-lg md:text-xl text-gray-200">정기 청소 1년 계약 시 <br className="hidden md:block" /><span className="text-yellow-400 font-bold">대청소 1회 무료 서비스</span></p>
                     </div>
-                    <div className="relative z-10 hidden md:block w-3/5 h-full">
-                        <img src="/assets/event_cleaning.png" alt="Regular Cleaning" className="object-contain w-full h-full transform scale-150 translate-x-8 translate-y-12" />
+                    <div className="relative z-0 hidden md:block w-1/2 h-full">
+                        <img
+                            src="/assets/event_cleaning.png"
+                            alt="Regular Cleaning"
+                            className="w-full h-full object-cover object-center"
+                        />
                     </div>
                 </motion.div>
 
