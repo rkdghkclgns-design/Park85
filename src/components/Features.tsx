@@ -93,7 +93,7 @@ export function Features() {
                     ))}
                 </div>
 
-                {/* Additional Trust Section */}
+                {/* 
                 <motion.div
                     initial={{ opacity: 0, y: 30 }}
                     whileInView={{ opacity: 1, y: 0 }}
@@ -101,7 +101,6 @@ export function Features() {
                     transition={{ duration: 0.6, delay: 0.4 }}
                     className="mt-20 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 bg-size-200 bg-pos-0 hover:bg-pos-100 transition-all duration-1000 rounded-3xl p-12 text-white relative overflow-hidden"
                 >
-                    {/* Animated Background Pattern */}
                     <div className="absolute inset-0 opacity-10">
                         <motion.div
                             animate={{
@@ -142,6 +141,7 @@ export function Features() {
                         ))}
                     </div>
                 </motion.div>
+                */}
             </div>
         </section>
     );

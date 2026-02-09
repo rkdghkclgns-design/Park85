@@ -21,7 +21,7 @@ export default function App() {
             <Services />
             <ServiceSelection />
             <SuitableSpaces />
-            <ClientLogos />
+            {/* <ClientLogos /> */}
             <HowItWorks />
             <Features />
             <Testimonials />

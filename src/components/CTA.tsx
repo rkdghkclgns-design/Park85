@@ -93,7 +93,7 @@ export function CTA() {
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }}
                         transition={{ duration: 0.6, delay: 0.4 }}
-                        className="flex flex-col sm:flex-row gap-4 justify-center mb-16"
+                        className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16"
                     >
                         <motion.div
                             whileHover={{ scale: 1.05, boxShadow: "0 25px 50px rgba(0,0,0,0.3)" }}
