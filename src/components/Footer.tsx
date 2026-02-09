@@ -27,23 +27,7 @@ export function Footer() {
                         <p className="text-gray-400 mb-6 leading-relaxed">
                             프리미엄 서비스 & 정기관리 크리닝 서비스, 당신의 소중한 시간을 만들어 드립니다.
                         </p>
-                        <div className="flex gap-4">
-                            {[
-                                { icon: Facebook, link: "#" },
-                                { icon: Instagram, link: "#" },
-                                { icon: Youtube, link: "#" },
-                            ].map((social, idx) => (
-                                <motion.a
-                                    key={idx}
-                                    href={social.link}
-                                    whileHover={{ scale: 1.2, rotate: 360 }}
-                                    transition={{ duration: 0.5 }}
-                                    className="bg-gray-800 p-3 rounded-full hover:bg-gradient-to-br hover:from-blue-600 hover:to-purple-600 transition-all"
-                                >
-                                    <social.icon className="w-5 h-5" />
-                                </motion.a>
-                            ))}
-                        </div>
+
                     </motion.div>
 
                     {/* Quick Links */}
@@ -136,11 +120,7 @@ export function Footer() {
                             </li>
                         </ul>
 
-                        <div className="mt-6 p-4 bg-gray-800 rounded-xl">
-                            <p className="text-sm text-gray-400 mb-2">고객센터 운영시간</p>
-                            <p className="text-white font-semibold">평일 09:00 - 18:00</p>
-                            <p className="text-sm text-gray-400">주말 및 공휴일 휴무</p>
-                        </div>
+
                     </motion.div>
                 </div>
 

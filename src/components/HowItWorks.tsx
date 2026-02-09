@@ -85,18 +85,26 @@ export function HowItWorks() {
                                 whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true }}
                                 transition={{ duration: 0.6, delay: index * 0.15 }}
-                                className="relative flex flex-col items-center"
+                                whileHover={{ y: -10, scale: 1.02 }}
+                                className="relative group flex flex-col items-center"
                             >
-                                <div className="bg-white rounded-2xl p-8 w-full h-full shadow-lg border border-gray-100 flex flex-col items-center text-center">
+                                <div className="bg-white rounded-2xl p-8 w-full h-full shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-100 flex flex-col items-center text-center">
                                     <span className="text-blue-600 font-bold mb-4 tracking-widest">{item.step}</span>
 
-                                    <div className={`p-4 rounded-2xl bg-gradient-to-br ${item.color} mb-6 shadow-md`}>
+                                    <motion.div
+                                        whileHover={{ rotate: 360, scale: 1.1 }}
+                                        transition={{ duration: 0.6 }}
+                                        className={`p-4 rounded-2xl bg-gradient-to-br ${item.color} mb-6 shadow-lg`}
+                                    >
                                         <item.icon className="w-8 h-8 text-white" />
-                                    </div>
+                                    </motion.div>
 
-                                    <h3 className="text-xl font-bold text-gray-900 mb-2">{item.title}</h3>
+                                    <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">{item.title}</h3>
                                     <p className="text-gray-500 text-sm break-keep">{item.desc}</p>
                                 </div>
+
+                                {/* Hover Effect Line */}
+                                <div className="absolute bottom-0 left-0 w-0 h-1 bg-gradient-to-r from-blue-500 to-purple-500 group-hover:w-full transition-all duration-500 rounded-b-2xl"></div>
                             </motion.div>
                         ))}
                     </div>
@@ -142,44 +150,13 @@ export function HowItWorks() {
                             </motion.div>
 
                             <h3 className="text-3xl md:text-4xl font-bold mb-4">
-                                첫 이용 고객 특별 할인
+                                더 이상 건물관리 걱정하지 마세요
                             </h3>
                             <p className="text-xl text-blue-100 mb-8 max-w-2xl mx-auto">
-                                신규 가입 시 첫 클리닝 30% 할인 혜택을 드립니다
+                                지금 바로 무료 상담을 신청하세요!
                             </p>
 
-                            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                                <motion.button
-                                    whileHover={{ scale: 1.05, boxShadow: "0 20px 40px rgba(0,0,0,0.3)" }}
-                                    whileTap={{ scale: 0.95 }}
-                                    onClick={() => setIsOpen(true)}
-                                    className="bg-white text-blue-600 px-10 py-4 rounded-full text-lg font-semibold hover:bg-gray-100 transition-all shadow-xl"
-                                >
-                                    무료 상담 신청
-                                </motion.button>
-                            </div>
 
-                            {/* Trust Badges */}
-                            <div className="mt-12 flex flex-wrap justify-center gap-8 text-sm">
-                                <div className="flex items-center gap-2">
-                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                    </svg>
-                                    <span>무료 견적</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                    </svg>
-                                    <span>100% 책임 서비스</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                    </svg>
-                                    <span>친환경 장비 사용</span>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </motion.div>

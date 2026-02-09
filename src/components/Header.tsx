@@ -43,7 +43,13 @@ export function Header() {
                         </Button>
                     </nav>
 
-
+                    {/* Mobile Simple Consultation Button */}
+                    <Button
+                        onClick={() => setIsOpen(true)}
+                        className="lg:hidden bg-[#1e2b4f] hover:bg-[#151f3a] text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors"
+                    >
+                        간편 상담
+                    </Button>
 
                     {/* Mobile Menu Button */}
                     <button

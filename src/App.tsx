@@ -23,10 +23,10 @@ export default function App() {
             <SuitableSpaces />
             {/* <ClientLogos /> */}
             <HowItWorks />
-            <Features />
-            <Testimonials />
+            {/* <Features /> */}
+            {/* <Testimonials /> */}
             <EventBanners />
-            <CTA />
+            {/* <CTA /> */}
             <Footer />
             <CartDrawer />
             <ScrollToTop />

@@ -44,7 +44,8 @@ export function EventBanners() {
     return (
         <section className="py-12 px-4 sm:px-6 lg:px-8 bg-white">
             <div className="max-w-7xl mx-auto">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* 2x2 그리드 배열 - 배너 수량에 따라 자동 배치 */}
+                <div className="grid grid-cols-2 gap-4 md:gap-6">
                     {banners.map((item, index) => (
                         <motion.div
                             key={item.id}
@@ -52,20 +53,20 @@ export function EventBanners() {
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
                             transition={{ delay: index * 0.1 }}
-                            className={`${item.bgColor} rounded-2xl relative overflow-hidden h-72 md:h-80 flex flex-col justify-center p-8`}
+                            className={`${item.bgColor} rounded-2xl relative overflow-hidden h-44 md:h-56 flex flex-col justify-center p-4 md:p-8`}
                         >
                             <div className="relative z-10 w-1/2">
-                                <span className={`inline-block ${item.badgeColor} ${item.badgeTextColor || 'text-white'} px-3 py-1 rounded-full text-xs font-bold mb-4`}>
+                                <span className={`inline-block ${item.badgeColor} ${item.badgeTextColor || 'text-white'} px-2 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-bold mb-2 md:mb-4`}>
                                     {item.id}
                                 </span>
-                                <h3 className={`text-xl md:text-2xl font-bold mb-3 ${item.textColor}`}>
+                                <h3 className={`text-sm md:text-2xl font-bold mb-1 md:mb-3 ${item.textColor}`}>
                                     {item.title}
                                 </h3>
-                                <div className={`text-sm md:text-base mb-4 ${item.textColor === 'text-white' ? 'text-gray-200' : 'text-gray-600'}`}>
+                                <div className={`text-[10px] md:text-base mb-2 md:mb-4 ${item.textColor === 'text-white' ? 'text-gray-200' : 'text-gray-600'}`}>
                                     {item.desc}
                                 </div>
                                 {item.highlight && (
-                                    <div className={`${item.highlightColor} font-black text-3xl`}>
+                                    <div className={`${item.highlightColor} font-black text-lg md:text-3xl`}>
                                         {item.highlight}
                                     </div>
                                 )}

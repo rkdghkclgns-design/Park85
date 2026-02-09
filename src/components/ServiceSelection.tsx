@@ -50,10 +50,10 @@ export function ServiceSelection() {
                     </div>
                 </div>
 
-                {/* 3. 딥 클리닝 */}
+                {/* 3. 프리미엄 클리닝 */}
                 <div className="mb-16">
                     <div className="mb-8 flex items-center justify-center gap-2">
-                        <span className="font-bold text-xl text-gray-900 px-4 py-1 bg-gray-100 rounded-full">딥 클리닝</span>
+                        <span className="font-bold text-xl text-gray-900 px-4 py-1 bg-gray-100 rounded-full">프리미엄 클리닝</span>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
                         {deepCleaningServices.map((service, index) => (
@@ -67,7 +67,7 @@ export function ServiceSelection() {
                     <div className="mb-8 flex items-center justify-center gap-2">
                         <span className="font-bold text-xl text-gray-900 px-4 py-1 bg-gray-100 rounded-full">건물 관리</span>
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 justify-center">
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6 justify-center">
                         {buildingManagementServices.map((service, index) => (
                             <ServiceCard key={service.id} service={service} index={index} toggleItem={toggleItem} isSelected={isSelected} />
                         ))}
