@@ -96,12 +96,12 @@ export function EventBanners() {
                                 transition={{ delay: index * 0.1 }}
                                 className={`${item.bgColor} rounded-2xl relative overflow-hidden h-52 md:h-64 flex flex-col justify-center p-4 md:p-8 cursor-pointer hover:shadow-lg transition-all`}
                             >
-                                {/* Badge - Absolutely Positioned */}
-                                <span className={`absolute top-4 left-4 md:top-6 md:left-6 z-20 inline-block ${item.badgeColor} ${item.badgeTextColor || 'text-white'} px-2 md:px-3 py-1 rounded-full text-[10px] md:text-sm font-bold`}>
+                                {/* Badge - Absolutely Positioned Top-Left */}
+                                <span className={`absolute top-6 left-6 z-20 inline-block ${item.badgeColor} ${item.badgeTextColor || 'text-white'} px-3 py-1 rounded-full text-xs md:text-sm font-bold`}>
                                     {item.id}
                                 </span>
 
-                                <div className="relative z-10 w-[55%] break-keep">
+                                <div className="relative z-10 w-[55%] break-keep pt-8">
                                     <h3 className={`text-lg md:text-2xl font-bold mb-1 md:mb-3 leading-tight ${item.textColor}`}>
                                         {item.title}
                                     </h3>

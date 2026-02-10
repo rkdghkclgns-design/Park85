@@ -26,7 +26,8 @@ export function ClientLogos() {
                 </h2>
             </div>
 
-            <div className="relative w-full overflow-hidden">
+            {/* Mobile/Tablet: Marquee Scrolling */}
+            <div className="relative w-full overflow-hidden block lg:hidden">
                 <div className="flex animate-marquee gap-8">
                     {/* First set of logos */}
                     {clients.map((client, index) => (
@@ -71,6 +72,24 @@ export function ClientLogos() {
                         </div>
                     ))}
                 </div>
+            </div>
+
+            {/* PC: Static Centered Row - 데스크톱에서는 정지된 화면으로 5개 나열 */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 hidden lg:flex justify-center gap-6">
+                {clients.map((client, index) => (
+                    <motion.div
+                        key={`pc-logo-${index}`}
+                        className="w-48 h-32 bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center p-6 hover:shadow-md transition-shadow"
+                        whileHover={{ y: -5 }}
+                    >
+                        <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-3 text-gray-400">
+                            <Building2 size={24} />
+                        </div>
+                        <span className="font-bold text-gray-700 text-base text-center">
+                            {client.name}
+                        </span>
+                    </motion.div>
+                ))}
             </div>
         </section>
     );
