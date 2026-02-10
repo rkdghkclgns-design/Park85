@@ -24,7 +24,7 @@ export default function App() {
             {/* <ClientLogos /> */}
             <HowItWorks />
             <Features />
-            {/* <Testimonials /> */}
+            <Testimonials />
             <EventBanners />
             <CTA />
             <Footer />
