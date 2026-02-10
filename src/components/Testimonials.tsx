@@ -138,67 +138,7 @@ export function Testimonials() {
                     ))}
                 </div>
 
-                {/* Stats Section */}
-                <motion.div
-                    initial={{ opacity: 0, y: 30 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.6, delay: 0.5 }}
-                    className="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 bg-size-200 bg-pos-0 hover:bg-pos-100 transition-all duration-1000 rounded-3xl p-12 text-white relative overflow-hidden"
-                >
-                    {/* Animated Background */}
-                    <div className="absolute inset-0 opacity-10">
-                        <motion.div
-                            animate={{
-                                scale: [1, 1.5, 1],
-                                rotate: [0, 180, 360],
-                            }}
-                            transition={{
-                                duration: 15,
-                                repeat: Infinity,
-                                ease: "linear",
-                            }}
-                            className="absolute top-0 left-0 w-full h-full"
-                            style={{
-                                backgroundImage: "radial-gradient(circle, white 2px, transparent 2px)",
-                                backgroundSize: "40px 40px",
-                            }}
-                        />
-                    </div>
 
-                    <div className="grid md:grid-cols-4 gap-8 text-center relative z-10">
-                        {[
-                            { number: "4.9", suffix: "/5", label: "평균 만족도", icon: "⭐" },
-                            { number: "15,000", suffix: "+", label: "누적 고객", icon: "👥" },
-                            { number: "100,000", suffix: "+", label: "완료된 크리닝", icon: "✨" },
-                            { number: "99", suffix: "%", label: "재이용률", icon: "💯" },
-                        ].map((stat, idx) => (
-                            <motion.div
-                                key={stat.label}
-                                initial={{ opacity: 0, scale: 0.5 }}
-                                whileInView={{ opacity: 1, scale: 1 }}
-                                viewport={{ once: true }}
-                                transition={{ duration: 0.5, delay: 0.7 + idx * 0.1, type: "spring" }}
-                                whileHover={{ scale: 1.1 }}
-                            >
-                                <div className="text-5xl mb-2">{stat.icon}</div>
-                                <div className="flex items-baseline justify-center mb-2">
-                                    <motion.span
-                                        initial={{ opacity: 0 }}
-                                        whileInView={{ opacity: 1 }}
-                                        viewport={{ once: true }}
-                                        transition={{ duration: 1, delay: 0.9 + idx * 0.1 }}
-                                        className="text-5xl font-bold"
-                                    >
-                                        {stat.number}
-                                    </motion.span>
-                                    <span className="text-2xl ml-1">{stat.suffix}</span>
-                                </div>
-                                <div className="text-blue-100 font-medium">{stat.label}</div>
-                            </motion.div>
-                        ))}
-                    </div>
-                </motion.div>
 
 
             </div>

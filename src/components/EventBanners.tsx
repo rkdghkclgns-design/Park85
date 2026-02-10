@@ -81,7 +81,7 @@ export function EventBanners() {
                                 whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true }}
                                 transition={{ delay: index * 0.1 }}
-                                className={`${item.bgColor} rounded-2xl relative overflow-hidden h-44 md:h-56 flex flex-col justify-center p-4 md:p-8 cursor-pointer hover:shadow-lg transition-all`}
+                                className={`${item.bgColor} rounded-2xl relative overflow-hidden h-44 md:h-56 flex flex-col justify-start pt-6 p-4 md:p-8 cursor-pointer hover:shadow-lg transition-all`}
                             >
                                 <div className="relative z-10 w-[55%] break-keep">
                                     <span className={`inline-block ${item.badgeColor} ${item.badgeTextColor || 'text-white'} px-2 md:px-3 py-1 rounded-full text-[10px] md:text-sm font-bold mb-2 md:mb-3`}>

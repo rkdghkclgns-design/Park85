@@ -81,33 +81,10 @@ export function CTA() {
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }}
                         transition={{ duration: 0.6, delay: 0.3 }}
-                        className="text-xl md:text-2xl text-blue-100 mb-12 max-w-3xl mx-auto leading-relaxed"
+                        className="text-xl md:text-2xl text-blue-100 mb-12 max-w-3xl mx-auto leading-relaxed font-bold"
                     >
-                        첫 이용 고객님께 <span className="text-yellow-300 font-bold">30% 특별 할인</span> 혜택을 드립니다.
-                        <br />
                         지금 바로 무료 상담을 신청하세요!
                     </motion.p>
-
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ duration: 0.6, delay: 0.4 }}
-                        className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16"
-                    >
-                        <motion.div
-                            whileHover={{ scale: 1.05, boxShadow: "0 25px 50px rgba(0,0,0,0.3)" }}
-                            whileTap={{ scale: 0.95 }}
-                        >
-                            <Button
-                                onClick={() => setIsOpen(true)}
-                                className="bg-white text-blue-600 hover:bg-gray-100 px-10 py-7 text-lg rounded-full shadow-2xl group"
-                            >
-                                무료 상담 신청하기
-                                <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                            </Button>
-                        </motion.div>
-                    </motion.div>
                 </div>
 
                 {/* Contact Methods */}
