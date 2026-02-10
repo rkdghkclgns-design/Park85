@@ -83,14 +83,14 @@ export function EventBanners() {
                                 transition={{ delay: index * 0.1 }}
                                 className={`${item.bgColor} rounded-2xl relative overflow-hidden h-44 md:h-56 flex flex-col justify-center p-4 md:p-8 cursor-pointer hover:shadow-lg transition-all`}
                             >
-                                <div className="relative z-10 w-1/2">
-                                    <span className={`inline-block ${item.badgeColor} ${item.badgeTextColor || 'text-white'} px-2 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-bold mb-2 md:mb-4`}>
+                                <div className="relative z-10 w-[65%] break-keep">
+                                    <span className={`inline-block ${item.badgeColor} ${item.badgeTextColor || 'text-white'} px-2 md:px-3 py-1 rounded-full text-[10px] md:text-sm font-bold mb-2 md:mb-3`}>
                                         {item.id}
                                     </span>
-                                    <h3 className={`text-sm md:text-2xl font-bold mb-1 md:mb-3 ${item.textColor}`}>
+                                    <h3 className={`text-lg md:text-2xl font-bold mb-1 md:mb-3 leading-tight ${item.textColor}`}>
                                         {item.title}
                                     </h3>
-                                    <div className={`text-[10px] md:text-base mb-2 md:mb-4 ${item.textColor === 'text-white' ? 'text-gray-200' : 'text-gray-600'}`}>
+                                    <div className={`text-xs md:text-base mb-2 md:mb-4 leading-relaxed ${item.textColor === 'text-white' ? 'text-gray-200' : 'text-gray-600'}`}>
                                         {item.desc}
                                     </div>
                                     {item.highlight && (
