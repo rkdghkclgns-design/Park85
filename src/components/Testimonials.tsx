@@ -68,7 +68,7 @@ export function Testimonials() {
                     <span className="inline-block bg-blue-100 text-blue-600 px-4 py-2 rounded-full text-sm font-semibold mb-4">
                         고객 후기
                     </span>
-                    <h2 className="text-4xl md:text-5xl text-gray-900 mb-4">
+                    <h2 className="text-2xl sm:text-3xl md:text-5xl text-gray-900 mb-4 whitespace-nowrap overflow-hidden text-ellipsis">
                         고객님들의 <span className="text-blue-600">생생한 이야기</span>
                     </h2>
                     <p className="text-xl text-gray-600 max-w-2xl mx-auto">

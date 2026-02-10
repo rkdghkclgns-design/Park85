@@ -86,45 +86,88 @@ export function EventBanners() {
                         이달의 <span className="text-blue-600">이벤트</span>
                     </h2>
                 </motion.div>
-                <Slider {...settings} className="-mx-2">
-                    {banners.map((item, index) => (
-                        <div key={item.id} className="px-2">
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                whileInView={{ opacity: 1, y: 0 }}
-                                viewport={{ once: true }}
-                                transition={{ delay: index * 0.1 }}
-                                className={`${item.bgColor} rounded-2xl relative overflow-hidden h-52 md:h-64 flex flex-col justify-center p-4 md:p-8 cursor-pointer hover:shadow-lg transition-all`}
-                            >
-                                {/* Badge - Absolutely Positioned Top-Left */}
-                                <span className={`absolute top-6 left-6 z-20 inline-block ${item.badgeColor} ${item.badgeTextColor || 'text-white'} px-3 py-1 rounded-full text-xs md:text-sm font-bold`}>
-                                    {item.id}
-                                </span>
+                {/* Desktop/Tablet: Slider */}
+                <div className="hidden md:block">
+                    <Slider {...settings} className="-mx-2">
+                        {banners.map((item, index) => (
+                            <div key={item.id} className="px-2">
+                                <motion.div
+                                    initial={{ opacity: 0, y: 20 }}
+                                    whileInView={{ opacity: 1, y: 0 }}
+                                    viewport={{ once: true }}
+                                    transition={{ delay: index * 0.1 }}
+                                    className={`${item.bgColor} rounded-2xl relative overflow-hidden h-52 md:h-64 flex flex-col justify-center p-4 md:p-8 cursor-pointer hover:shadow-lg transition-all`}
+                                >
+                                    {/* Badge - Absolutely Positioned Top-Left */}
+                                    <span className={`absolute top-6 left-6 z-20 inline-block ${item.badgeColor} ${item.badgeTextColor || 'text-white'} px-3 py-1 rounded-full text-xs md:text-sm font-bold`}>
+                                        {item.id}
+                                    </span>
 
-                                <div className="relative z-10 w-[55%] break-keep pt-8">
-                                    <h3 className={`text-lg md:text-2xl font-bold mb-1 md:mb-3 leading-tight ${item.textColor}`}>
-                                        {item.title}
-                                    </h3>
-                                    <div className={`text-xs md:text-base mb-2 md:mb-4 leading-relaxed ${item.textColor === 'text-white' ? 'text-gray-200' : 'text-gray-600'}`}>
-                                        {item.desc}
-                                    </div>
-                                    {item.highlight && (
-                                        <div className={`${item.highlightColor} font-black text-lg md:text-3xl`}>
-                                            {item.highlight}
+                                    <div className="relative z-10 w-[55%] break-keep pt-8">
+                                        <h3 className={`text-lg md:text-2xl font-bold mb-1 md:mb-3 leading-tight ${item.textColor}`}>
+                                            {item.title}
+                                        </h3>
+                                        <div className={`text-xs md:text-base mb-2 md:mb-4 leading-relaxed ${item.textColor === 'text-white' ? 'text-gray-200' : 'text-gray-600'}`}>
+                                            {item.desc}
                                         </div>
-                                    )}
+                                        {item.highlight && (
+                                            <div className={`${item.highlightColor} font-black text-lg md:text-3xl`}>
+                                                {item.highlight}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="absolute right-0 top-0 bottom-0 w-[45%] h-full z-0 overflow-hidden">
+                                        <img
+                                            src={item.img}
+                                            alt={item.title}
+                                            className={`w-full h-full ${item.imgPosition}`}
+                                        />
+                                    </div>
+                                </motion.div>
+                            </div>
+                        ))}
+                    </Slider>
+                </div>
+
+                {/* Mobile: Vertical List - 모바일에서는 나열식으로 보이게 변경 */}
+                <div className="flex flex-col gap-4 md:hidden">
+                    {banners.map((item, index) => (
+                        <motion.div
+                            key={`mobile-${item.id}`}
+                            initial={{ opacity: 0, x: -20 }}
+                            whileInView={{ opacity: 1, x: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: index * 0.1 }}
+                            className={`${item.bgColor} rounded-2xl relative overflow-hidden h-52 flex flex-col justify-center p-6`}
+                        >
+                            {/* Badge */}
+                            <span className={`absolute top-4 left-4 z-20 inline-block ${item.badgeColor} ${item.badgeTextColor || 'text-white'} px-2 py-0.5 rounded-full text-[10px] font-bold`}>
+                                {item.id}
+                            </span>
+
+                            <div className="relative z-10 w-[60%] break-keep pt-4">
+                                <h3 className={`text-xl font-bold mb-1 leading-tight ${item.textColor}`}>
+                                    {item.title}
+                                </h3>
+                                <div className={`text-xs mb-2 leading-relaxed ${item.textColor === 'text-white' ? 'text-gray-200' : 'text-gray-600'}`}>
+                                    {item.desc}
                                 </div>
-                                <div className="absolute right-0 top-0 bottom-0 w-[45%] h-full z-0 overflow-hidden">
-                                    <img
-                                        src={item.img}
-                                        alt={item.title}
-                                        className={`w-full h-full ${item.imgPosition}`}
-                                    />
-                                </div>
-                            </motion.div>
-                        </div>
+                                {item.highlight && (
+                                    <div className={`${item.highlightColor} font-black text-2xl`}>
+                                        {item.highlight}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="absolute right-0 top-0 bottom-0 w-[40%] h-full z-0 overflow-hidden">
+                                <img
+                                    src={item.img}
+                                    alt={item.title}
+                                    className={`w-full h-full ${item.imgPosition}`}
+                                />
+                            </div>
+                        </motion.div>
                     ))}
-                </Slider>
+                </div>
             </div>
         </section>
     );

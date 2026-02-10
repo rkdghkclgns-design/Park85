@@ -26,42 +26,13 @@ export function ClientLogos() {
                 </h2>
             </div>
 
-            {/* Mobile/Tablet: Marquee Scrolling */}
-            <div className="relative w-full overflow-hidden block lg:hidden">
-                <div className="flex animate-marquee gap-8">
-                    {/* First set of logos */}
+            {/* Mobile/Tablet: Manual Swipe - 손으로 스와이프해서 볼 수 있게 변경 */}
+            <div className="relative w-full overflow-x-auto snap-x snap-mandatory block lg:hidden pb-4 scrollbar-hide">
+                <div className="flex gap-4 px-4 w-max">
                     {clients.map((client, index) => (
                         <div
-                            key={`logo-1-${index}`}
-                            className="flex-shrink-0 w-40 h-24 bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center p-4"
-                        >
-                            <div className="w-10 h-10 bg-gray-50 rounded-full flex items-center justify-center mb-2 text-gray-400">
-                                <Building2 size={20} />
-                            </div>
-                            <span className="font-bold text-gray-700 text-sm text-center">
-                                {client.name}
-                            </span>
-                        </div>
-                    ))}
-                    {/* Duplicate set for seamless scrolling */}
-                    {clients.map((client, index) => (
-                        <div
-                            key={`logo-2-${index}`}
-                            className="flex-shrink-0 w-40 h-24 bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center p-4"
-                        >
-                            <div className="w-10 h-10 bg-gray-50 rounded-full flex items-center justify-center mb-2 text-gray-400">
-                                <Building2 size={20} />
-                            </div>
-                            <span className="font-bold text-gray-700 text-sm text-center">
-                                {client.name}
-                            </span>
-                        </div>
-                    ))}
-                    {/* Triplicate set for wider screens just in case */}
-                    {clients.map((client, index) => (
-                        <div
-                            key={`logo-3-${index}`}
-                            className="flex-shrink-0 w-40 h-24 bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center p-4"
+                            key={`logo-mobile-${index}`}
+                            className="flex-shrink-0 w-40 h-24 bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center p-4 snap-center"
                         >
                             <div className="w-10 h-10 bg-gray-50 rounded-full flex items-center justify-center mb-2 text-gray-400">
                                 <Building2 size={20} />
