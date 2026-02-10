@@ -27,7 +27,7 @@ export function EventBanners() {
             badgeColor: "bg-blue-100",
             badgeTextColor: "text-blue-600",
             highlightColor: "text-blue-600",
-            imgPosition: "object-contain transform scale-125 translate-x-8 translate-y-8"
+            imgPosition: "object-right"
         },
         {
             id: "EVENT 03",
@@ -40,7 +40,7 @@ export function EventBanners() {
             badgeColor: "bg-orange-100",
             badgeTextColor: "text-orange-600",
             highlightColor: "text-orange-500",
-            imgPosition: "object-contain transform scale-125 translate-x-8 translate-y-8"
+            imgPosition: "object-right"
         }
     ];
 
