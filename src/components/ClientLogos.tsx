@@ -4,18 +4,11 @@ import { useEffect, useState } from "react";
 import { Building2 } from "lucide-react";
 
 const clients = [
-    { name: "삼성전자", logo: "" },
-    { name: "LG디스플레이", logo: "" },
-    { name: "카카오", logo: "" },
-    { name: "네이버", logo: "" },
-    { name: "SK하이닉스", logo: "" },
-    { name: "현대자동차", logo: "" },
-    { name: "CJ ENM", logo: "" },
-    { name: "우아한형제들", logo: "" },
-    { name: "쿠팡", logo: "" },
-    { name: "비바리퍼블리카", logo: "" },
-    { name: "GS리테일", logo: "" },
-    { name: "롯데쇼핑", logo: "" },
+    { name: "씨에스 코페레이션", logo: "" },
+    { name: "동아지질", logo: "" },
+    { name: "옛골 흑염소", logo: "" },
+    { name: "나산 건축", logo: "" },
+    { name: "플레이 캔버스", logo: "" },
 ];
 
 export function ClientLogos() {
@@ -34,11 +27,11 @@ export function ClientLogos() {
             </div>
 
             <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                <div className="flex flex-wrap justify-center gap-4">
                     {randomizedClients.map((client, index) => (
                         <motion.div
                             key={`${client.name}-${index}`}
-                            className="group"
+                            className="group w-[calc(50%-0.5rem)] md:w-[calc(33.33%-0.7rem)] lg:w-[calc(20%-0.8rem)]"
                             whileHover={{ y: -5, scale: 1.02 }}
                         >
                             <div className="flex flex-col items-center justify-center p-6 bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 w-full h-40 relative overflow-hidden">

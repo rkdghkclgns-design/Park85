@@ -73,6 +73,19 @@ export function EventBanners() {
     return (
         <section className="py-12 px-4 sm:px-6 lg:px-8 bg-white overflow-hidden">
             <div className="max-w-7xl mx-auto">
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    className="text-center mb-10"
+                >
+                    <span className="inline-block bg-blue-100 text-blue-600 px-4 py-2 rounded-full text-sm font-semibold mb-4">
+                        EVENT
+                    </span>
+                    <h2 className="text-3xl md:text-4xl font-bold text-gray-900">
+                        이달의 <span className="text-blue-600">이벤트</span>
+                    </h2>
+                </motion.div>
                 <Slider {...settings} className="-mx-2">
                     {banners.map((item, index) => (
                         <div key={item.id} className="px-2">
@@ -81,7 +94,7 @@ export function EventBanners() {
                                 whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true }}
                                 transition={{ delay: index * 0.1 }}
-                                className={`${item.bgColor} rounded-2xl relative overflow-hidden h-44 md:h-56 flex flex-col justify-center p-4 md:p-8 cursor-pointer hover:shadow-lg transition-all`}
+                                className={`${item.bgColor} rounded-2xl relative overflow-hidden h-52 md:h-64 flex flex-col justify-center p-4 md:p-8 cursor-pointer hover:shadow-lg transition-all`}
                             >
                                 {/* Badge - Absolutely Positioned */}
                                 <span className={`absolute top-4 left-4 md:top-6 md:left-6 z-20 inline-block ${item.badgeColor} ${item.badgeTextColor || 'text-white'} px-2 md:px-3 py-1 rounded-full text-[10px] md:text-sm font-bold`}>

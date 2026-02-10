@@ -17,15 +17,25 @@ export default function App() {
     return (
         <div className="min-h-screen bg-white">
             <Header />
+            <div className="h-px bg-gray-100 w-full" />
             <Hero />
+            <div className="h-px bg-gray-100 w-full" />
             <Services />
+            <div className="h-px bg-gray-100 w-full" />
             <ServiceSelection />
+            <div className="h-px bg-gray-100 w-full" />
             <SuitableSpaces />
-            {/* <ClientLogos /> */}
+            <div className="h-px bg-gray-100 w-full" />
             <HowItWorks />
+            <div className="h-px bg-gray-100 w-full" />
             <Features />
+            <div className="h-px bg-gray-100 w-full" />
             <Testimonials />
+            <div className="h-px bg-gray-100 w-full" />
+            <ClientLogos />
+            <div className="h-px bg-gray-100 w-full" />
             <EventBanners />
+            <div className="h-px bg-gray-100 w-full" />
             <CTA />
             <Footer />
             <CartDrawer />
