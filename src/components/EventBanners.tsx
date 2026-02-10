@@ -1,5 +1,8 @@
 import { motion } from "motion/react";
 import { ArrowRight } from "lucide-react";
+import Slider from "react-slick";
+import "slick-carousel/slick/slick.css";
+import "slick-carousel/slick/slick-theme.css";
 
 export function EventBanners() {
     const banners = [
@@ -41,46 +44,72 @@ export function EventBanners() {
         }
     ];
 
+    const settings = {
+        dots: true,
+        infinite: true,
+        speed: 500,
+        slidesToShow: 3,
+        slidesToScroll: 1,
+        autoplay: true,
+        autoplaySpeed: 3000,
+        responsive: [
+            {
+                breakpoint: 1024,
+                settings: {
+                    slidesToShow: 2,
+                    slidesToScroll: 1,
+                }
+            },
+            {
+                breakpoint: 640,
+                settings: {
+                    slidesToShow: 1,
+                    slidesToScroll: 1
+                }
+            }
+        ]
+    };
+
     return (
-        <section className="py-12 px-4 sm:px-6 lg:px-8 bg-white">
+        <section className="py-12 px-4 sm:px-6 lg:px-8 bg-white overflow-hidden">
             <div className="max-w-7xl mx-auto">
-                {/* 2x2 그리드 배열 - 배너 수량에 따라 자동 배치 */}
-                <div className="grid grid-cols-2 gap-4 md:gap-6">
+                <Slider {...settings} className="-mx-2">
                     {banners.map((item, index) => (
-                        <motion.div
-                            key={item.id}
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ delay: index * 0.1 }}
-                            className={`${item.bgColor} rounded-2xl relative overflow-hidden h-44 md:h-56 flex flex-col justify-center p-4 md:p-8`}
-                        >
-                            <div className="relative z-10 w-1/2">
-                                <span className={`inline-block ${item.badgeColor} ${item.badgeTextColor || 'text-white'} px-2 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-bold mb-2 md:mb-4`}>
-                                    {item.id}
-                                </span>
-                                <h3 className={`text-sm md:text-2xl font-bold mb-1 md:mb-3 ${item.textColor}`}>
-                                    {item.title}
-                                </h3>
-                                <div className={`text-[10px] md:text-base mb-2 md:mb-4 ${item.textColor === 'text-white' ? 'text-gray-200' : 'text-gray-600'}`}>
-                                    {item.desc}
-                                </div>
-                                {item.highlight && (
-                                    <div className={`${item.highlightColor} font-black text-lg md:text-3xl`}>
-                                        {item.highlight}
+                        <div key={item.id} className="px-2">
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true }}
+                                transition={{ delay: index * 0.1 }}
+                                className={`${item.bgColor} rounded-2xl relative overflow-hidden h-44 md:h-56 flex flex-col justify-center p-4 md:p-8 cursor-pointer hover:shadow-lg transition-all`}
+                            >
+                                <div className="relative z-10 w-1/2">
+                                    <span className={`inline-block ${item.badgeColor} ${item.badgeTextColor || 'text-white'} px-2 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-bold mb-2 md:mb-4`}>
+                                        {item.id}
+                                    </span>
+                                    <h3 className={`text-sm md:text-2xl font-bold mb-1 md:mb-3 ${item.textColor}`}>
+                                        {item.title}
+                                    </h3>
+                                    <div className={`text-[10px] md:text-base mb-2 md:mb-4 ${item.textColor === 'text-white' ? 'text-gray-200' : 'text-gray-600'}`}>
+                                        {item.desc}
                                     </div>
-                                )}
-                            </div>
-                            <div className="absolute right-0 top-0 bottom-0 w-[60%] h-full z-0 overflow-hidden">
-                                <img
-                                    src={item.img}
-                                    alt={item.title}
-                                    className={`w-full h-full ${item.imgPosition}`}
-                                />
-                            </div>
-                        </motion.div>
+                                    {item.highlight && (
+                                        <div className={`${item.highlightColor} font-black text-lg md:text-3xl`}>
+                                            {item.highlight}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="absolute right-0 top-0 bottom-0 w-[60%] h-full z-0 overflow-hidden">
+                                    <img
+                                        src={item.img}
+                                        alt={item.title}
+                                        className={`w-full h-full ${item.imgPosition}`}
+                                    />
+                                </div>
+                            </motion.div>
+                        </div>
                     ))}
-                </div>
+                </Slider>
             </div>
         </section>
     );

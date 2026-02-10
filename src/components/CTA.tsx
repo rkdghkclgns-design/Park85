@@ -122,7 +122,7 @@ export function CTA() {
                         {
                             icon: Phone,
                             title: "전화 상담",
-                            content: "1800-1234",
+                            content: "010-2740-1734",
                             description: "평일 09:00 - 18:00",
                             gradient: "from-blue-500 to-blue-600",
                         },
