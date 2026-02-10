@@ -24,8 +24,8 @@ export function Hero() {
 
     return (
         <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-blue-600 via-blue-500 to-purple-600">
-            {/* Mobile Background Video - 모바일에서만 배경으로 동영상 재생 */}
-            <div className="absolute inset-0 lg:hidden">
+            {/* Background Video - Visible on all devices */}
+            <div className="absolute inset-0">
                 <video
                     autoPlay
                     loop
@@ -35,14 +35,8 @@ export function Hero() {
                 >
                     <source src="./assets/맞춤형_청소_영상_제작.mp4" type="video/mp4" />
                 </video>
-                {/* 동영상 위 어두운 오버레이 - 텍스트 가독성 확보 */}
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-900/70 via-blue-800/60 to-purple-900/70"></div>
-            </div>
-
-            {/* Animated Background Pattern - 데스크톱 전용 */}
-            <div className="absolute inset-0 opacity-10 hidden lg:block">
-                <div className="absolute top-20 left-10 w-72 h-72 bg-white rounded-full blur-3xl animate-pulse"></div>
-                <div className="absolute bottom-20 right-10 w-96 h-96 bg-white rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1s" }}></div>
+                {/* Dark Overlay for readability */}
+                <div className="absolute inset-0 bg-gradient-to-b from-blue-900/60 via-purple-900/60 to-blue-900/80"></div>
             </div>
 
             {/* Floating Shapes */}
@@ -56,7 +50,7 @@ export function Hero() {
                     repeat: Infinity,
                     ease: "easeInOut",
                 }}
-                className="absolute top-1/4 left-10 w-20 h-20 border-4 border-white/30 rounded-2xl"
+                className="absolute top-1/4 left-10 w-20 h-20 border-4 border-white/30 rounded-2xl hidden lg:block"
             />
             <motion.div
                 animate={{
@@ -68,39 +62,38 @@ export function Hero() {
                     repeat: Infinity,
                     ease: "easeInOut",
                 }}
-                className="absolute bottom-1/4 right-20 w-32 h-32 border-4 border-white/20 rounded-full"
+                className="absolute bottom-1/4 right-20 w-32 h-32 border-4 border-white/20 rounded-full hidden lg:block"
             />
 
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32 relative z-10">
-                <div className="grid lg:grid-cols-2 gap-12 items-center">
-                    {/* Left Content */}
-                    <div>
-                        <motion.div
-                            initial={{ opacity: 0, y: 30 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.8 }}
-                        >
-                            <motion.span
-                                initial={{ opacity: 0, scale: 0.8 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                transition={{ duration: 0.6, delay: 0.2 }}
-                                className="inline-block bg-white/20 backdrop-blur-sm text-white px-6 py-2 rounded-full text-sm mb-6"
-                            >
-                                ✨ 프리미엄 크리닝 케어 서비스
-                            </motion.span>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32 relative z-10 flex flex-col items-center text-center">
+                <motion.div
+                    initial={{ opacity: 0, y: 30 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.8 }}
+                    className="flex flex-col items-center"
+                >
+                    <motion.span
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.6, delay: 0.2 }}
+                        className="inline-block bg-white/20 backdrop-blur-sm text-white px-6 py-2 rounded-full text-sm mb-6"
+                    >
+                        ✨ 프리미엄 크리닝 케어 서비스
+                    </motion.span>
 
-                            <h1 className="text-5xl md:text-6xl lg:text-7xl text-white mb-6 leading-tight">
-                                <span className="text-yellow-300">본연</span>의 모습을
-                                <br />
-                                되찾아드립니다
-                            </h1>
+                    <h1 className="text-5xl md:text-6xl lg:text-7xl text-white mb-6 leading-tight">
+                        <span className="text-yellow-300">본연</span>의 모습을
+                        <br />
+                        되찾아드립니다
+                    </h1>
 
-                            <p className="text-xl text-white/90 mb-10 leading-relaxed max-w-xl">
-                                전문적인 기술과 장비로
-                                최고의 서비스를 제공합니다.
-                            </p>
+                    <p className="text-xl text-white/90 mb-10 leading-relaxed max-w-xl">
+                        전문적인 기술과 장비로
+                        <br className="hidden md:block" />
+                        최고의 서비스를 제공합니다.
+                    </p>
 
-                            {/* 무료 상담 받기 버튼 - 비활성화
+                    {/* 무료 상담 받기 버튼 - 비활성화
                             <div className="flex flex-col sm:flex-row gap-4 mb-12">
                                 <motion.div
                                     whileHover={{ scale: 1.05, boxShadow: "0 20px 40px rgba(0,0,0,0.2)" }}
@@ -117,127 +110,44 @@ export function Hero() {
                             </div>
                             */}
 
-                            {/* Mobile Floating Cards - 모바일에서만 표시 */}
-                            <div className="flex flex-wrap gap-3 lg:hidden">
-                                <motion.div
-                                    initial={{ opacity: 0, x: -20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{ duration: 0.8, delay: 0.8 }}
-                                    className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-4"
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className="bg-green-100 rounded-full p-2">
-                                            <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                            </svg>
-                                        </div>
-                                        <div>
-                                            <div className="font-bold text-gray-900">철저한 인증</div>
-                                            <div className="text-xs text-gray-600">100% 그린 케어</div>
-                                        </div>
-                                    </div>
-                                </motion.div>
-
-                                <motion.div
-                                    initial={{ opacity: 0, x: 20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{ duration: 0.8, delay: 1 }}
-                                    className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-4"
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className="bg-blue-100 rounded-full p-2">
-                                            <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                                                <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                                                <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                            </svg>
-                                        </div>
-                                        <div>
-                                            <div className="font-bold text-gray-900">정기관리</div>
-                                            <div className="text-xs text-gray-600">원하는 시간에</div>
-                                        </div>
-                                    </div>
-                                </motion.div>
+                    {/* Floating Cards - Now centered below text */}
+                    <div className="flex flex-wrap justify-center gap-4 mt-8">
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.8, delay: 0.8 }}
+                            className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-4 flex items-center gap-3"
+                        >
+                            <div className="bg-green-100 rounded-full p-2">
+                                <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
                             </div>
+                            <div className="text-left">
+                                <div className="font-bold text-gray-900">철저한 인증</div>
+                                <div className="text-xs text-gray-600">100% 그린 케어</div>
+                            </div>
+                        </motion.div>
 
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.8, delay: 1 }}
+                            className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-4 flex items-center gap-3"
+                        >
+                            <div className="bg-blue-100 rounded-full p-2">
+                                <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                                    <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
+                            </div>
+                            <div className="text-left">
+                                <div className="font-bold text-gray-900">정기관리</div>
+                                <div className="text-xs text-gray-600">원하는 시간에</div>
+                            </div>
                         </motion.div>
                     </div>
-
-                    {/* Right Video Area */}
-                    <motion.div
-                        initial={{ opacity: 0, x: 50 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.8, delay: 0.3 }}
-                        className="relative hidden lg:block"
-                    >
-                        <motion.div
-                            animate={{
-                                y: [0, -15, 0],
-                            }}
-                            transition={{
-                                duration: 4,
-                                repeat: Infinity,
-                                ease: "easeInOut",
-                            }}
-                            className="relative"
-                        >
-                            <div className="relative rounded-3xl overflow-hidden shadow-2xl h-[600px] bg-gray-900 border-4 border-white/10">
-                                {/* Video Player */}
-                                <video
-                                    autoPlay
-                                    loop
-                                    muted
-                                    playsInline
-                                    className="absolute inset-0 w-full h-full object-cover opacity-90"
-                                >
-                                    <source src="./assets/맞춤형_청소_영상_제작.mp4" type="video/mp4" />
-                                    Your browser does not support the video tag.
-                                </video>
-
-                                <div className="absolute inset-0 bg-gradient-to-t from-blue-900/60 to-transparent pointer-events-none"></div>
-                            </div>
-
-                            {/* Floating Cards */}
-                            <motion.div
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ duration: 0.8, delay: 0.8 }}
-                                className="absolute -left-6 top-20 bg-white rounded-2xl shadow-2xl p-6 backdrop-blur-sm z-10"
-                            >
-                                <div className="flex items-center gap-4">
-                                    <div className="bg-green-100 rounded-full p-3">
-                                        <svg className="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <div className="font-bold text-gray-900 text-lg">철저한 인증</div>
-                                        <div className="text-sm text-gray-600">100% 그린 케어</div>
-                                    </div>
-                                </div>
-                            </motion.div>
-
-                            <motion.div
-                                initial={{ opacity: 0, x: 20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ duration: 0.8, delay: 1 }}
-                                className="absolute -right-6 bottom-20 bg-white rounded-2xl shadow-2xl p-6 backdrop-blur-sm z-10"
-                            >
-                                <div className="flex items-center gap-4">
-                                    <div className="bg-blue-100 rounded-full p-3">
-                                        <svg className="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                                            <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <div className="font-bold text-gray-900 text-lg">정기관리</div>
-                                        <div className="text-sm text-gray-600">원하는 시간에</div>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        </motion.div>
-                    </motion.div>
-                </div>
+                </motion.div>
             </div>
 
             {/* Scroll Indicator */}

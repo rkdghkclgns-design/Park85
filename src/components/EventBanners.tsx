@@ -61,7 +61,7 @@ export function EventBanners() {
                 }
             },
             {
-                breakpoint: 640,
+                breakpoint: 768, // Increased breakpoint to cover larger phones/small tablets
                 settings: {
                     slidesToShow: 1,
                     slidesToScroll: 1

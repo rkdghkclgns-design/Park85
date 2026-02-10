@@ -26,27 +26,49 @@ export function ClientLogos() {
                 </h2>
             </div>
 
-            <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="flex flex-wrap justify-center gap-4">
-                    {randomizedClients.map((client, index) => (
-                        <motion.div
-                            key={`${client.name}-${index}`}
-                            className="group w-[calc(50%-0.5rem)] md:w-[calc(33.33%-0.7rem)] lg:w-[calc(20%-0.8rem)]"
-                            whileHover={{ y: -5, scale: 1.02 }}
+            <div className="relative w-full overflow-hidden">
+                <div className="flex animate-marquee gap-8">
+                    {/* First set of logos */}
+                    {clients.map((client, index) => (
+                        <div
+                            key={`logo-1-${index}`}
+                            className="flex-shrink-0 w-40 h-24 bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center p-4"
                         >
-                            <div className="flex flex-col items-center justify-center p-6 bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 w-full h-40 relative overflow-hidden">
-                                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4 text-gray-400 group-hover:bg-blue-50 group-hover:text-blue-500 transition-colors">
-                                    {/* Placeholder for actual logo */}
-                                    <Building2 size={24} />
-                                </div>
-                                <span className="font-bold text-gray-700 text-sm whitespace-normal text-center line-clamp-2 group-hover:text-gray-900 transition-colors">
-                                    {client.name}
-                                </span>
-
-                                {/* Hover Effect Line */}
-                                <div className="absolute bottom-0 left-0 w-0 h-1 bg-gradient-to-r from-blue-500 to-purple-500 group-hover:w-full transition-all duration-500"></div>
+                            <div className="w-10 h-10 bg-gray-50 rounded-full flex items-center justify-center mb-2 text-gray-400">
+                                <Building2 size={20} />
                             </div>
-                        </motion.div>
+                            <span className="font-bold text-gray-700 text-sm text-center">
+                                {client.name}
+                            </span>
+                        </div>
+                    ))}
+                    {/* Duplicate set for seamless scrolling */}
+                    {clients.map((client, index) => (
+                        <div
+                            key={`logo-2-${index}`}
+                            className="flex-shrink-0 w-40 h-24 bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center p-4"
+                        >
+                            <div className="w-10 h-10 bg-gray-50 rounded-full flex items-center justify-center mb-2 text-gray-400">
+                                <Building2 size={20} />
+                            </div>
+                            <span className="font-bold text-gray-700 text-sm text-center">
+                                {client.name}
+                            </span>
+                        </div>
+                    ))}
+                    {/* Triplicate set for wider screens just in case */}
+                    {clients.map((client, index) => (
+                        <div
+                            key={`logo-3-${index}`}
+                            className="flex-shrink-0 w-40 h-24 bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center p-4"
+                        >
+                            <div className="w-10 h-10 bg-gray-50 rounded-full flex items-center justify-center mb-2 text-gray-400">
+                                <Building2 size={20} />
+                            </div>
+                            <span className="font-bold text-gray-700 text-sm text-center">
+                                {client.name}
+                            </span>
+                        </div>
                     ))}
                 </div>
             </div>
