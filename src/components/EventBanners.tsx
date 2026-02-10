@@ -83,7 +83,7 @@ export function EventBanners() {
                                 transition={{ delay: index * 0.1 }}
                                 className={`${item.bgColor} rounded-2xl relative overflow-hidden h-44 md:h-56 flex flex-col justify-center p-4 md:p-8 cursor-pointer hover:shadow-lg transition-all`}
                             >
-                                <div className="relative z-10 w-[65%] break-keep">
+                                <div className="relative z-10 w-[55%] break-keep">
                                     <span className={`inline-block ${item.badgeColor} ${item.badgeTextColor || 'text-white'} px-2 md:px-3 py-1 rounded-full text-[10px] md:text-sm font-bold mb-2 md:mb-3`}>
                                         {item.id}
                                     </span>
@@ -99,7 +99,7 @@ export function EventBanners() {
                                         </div>
                                     )}
                                 </div>
-                                <div className="absolute right-0 top-0 bottom-0 w-[60%] h-full z-0 overflow-hidden">
+                                <div className="absolute right-0 top-0 bottom-0 w-[45%] h-full z-0 overflow-hidden">
                                     <img
                                         src={item.img}
                                         alt={item.title}
