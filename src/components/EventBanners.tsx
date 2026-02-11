@@ -1,47 +1,14 @@
 import { motion } from "motion/react";
-import { ArrowRight } from "lucide-react";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 
 export function EventBanners() {
+    // 각 배너는 하나의 이미지로 구성
     const banners = [
-        {
-            id: "EVENT 01",
-            title: "정기 청소 이벤트",
-            desc: <>정기 청소 1년 계약 시 <br className="hidden md:block" /><span className="text-yellow-400 font-bold">대청소 1회 무료 서비스</span></>,
-            img: "/assets/event_cleaning.png",
-            bgColor: "bg-[#1a233a]",
-            textColor: "text-white",
-            badgeColor: "bg-blue-500",
-            imgPosition: "object-right"
-        },
-        {
-            id: "EVENT 02",
-            title: "비수기 에어컨 이벤트",
-            desc: "1월~5월 / 10월~12월 미리 준비하세요.",
-            highlight: "10% 할인",
-            img: "/assets/event_ac.png",
-            bgColor: "bg-[#eff6ff]",
-            textColor: "text-gray-900",
-            badgeColor: "bg-blue-100",
-            badgeTextColor: "text-blue-600",
-            highlightColor: "text-blue-600",
-            imgPosition: "object-right"
-        },
-        {
-            id: "EVENT 03",
-            title: "정기 소독 이벤트",
-            desc: "정기 소독 1년 계약 시",
-            highlight: "첫 달 무료",
-            img: "/assets/event_disinfection.png",
-            bgColor: "bg-[#fff7ed]",
-            textColor: "text-gray-900",
-            badgeColor: "bg-orange-100",
-            badgeTextColor: "text-orange-600",
-            highlightColor: "text-orange-500",
-            imgPosition: "object-right"
-        }
+        { id: "event-1", img: "/assets/event_cleaning.png", alt: "정기 청소 이벤트" },
+        { id: "event-2", img: "/assets/event_ac.png", alt: "비수기 에어컨 이벤트" },
+        { id: "event-3", img: "/assets/event_disinfection.png", alt: "정기 소독 이벤트" },
     ];
 
     const settings = {
@@ -61,7 +28,7 @@ export function EventBanners() {
                 }
             },
             {
-                breakpoint: 768, // Increased breakpoint to cover larger phones/small tablets
+                breakpoint: 768,
                 settings: {
                     slidesToShow: 1,
                     slidesToScroll: 1
@@ -86,6 +53,7 @@ export function EventBanners() {
                         이달의 <span className="text-blue-600">이벤트</span>
                     </h2>
                 </motion.div>
+
                 {/* Desktop/Tablet: Slider */}
                 <div className="hidden md:block">
                     <Slider {...settings} className="-mx-2">
@@ -96,40 +64,20 @@ export function EventBanners() {
                                     whileInView={{ opacity: 1, y: 0 }}
                                     viewport={{ once: true }}
                                     transition={{ delay: index * 0.1 }}
-                                    className={`${item.bgColor} rounded-2xl relative overflow-hidden h-52 md:h-64 flex flex-col justify-center p-4 md:p-8 cursor-pointer hover:shadow-lg transition-all`}
+                                    className="rounded-2xl overflow-hidden cursor-pointer hover:shadow-lg transition-all"
                                 >
-                                    {/* Badge - Absolutely Positioned Top-Left */}
-                                    <span className={`absolute top-6 left-6 z-20 inline-block ${item.badgeColor} ${item.badgeTextColor || 'text-white'} px-3 py-1 rounded-full text-xs md:text-sm font-bold`}>
-                                        {item.id}
-                                    </span>
-
-                                    <div className="relative z-10 w-[55%] break-keep pt-8">
-                                        <h3 className={`text-lg md:text-2xl font-bold mb-1 md:mb-3 leading-tight ${item.textColor}`}>
-                                            {item.title}
-                                        </h3>
-                                        <div className={`text-xs md:text-base mb-2 md:mb-4 leading-relaxed ${item.textColor === 'text-white' ? 'text-gray-200' : 'text-gray-600'}`}>
-                                            {item.desc}
-                                        </div>
-                                        {item.highlight && (
-                                            <div className={`${item.highlightColor} font-black text-lg md:text-3xl`}>
-                                                {item.highlight}
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="absolute right-0 top-0 bottom-0 w-[45%] h-full z-0 overflow-hidden">
-                                        <img
-                                            src={item.img}
-                                            alt={item.title}
-                                            className={`w-full h-full ${item.imgPosition}`}
-                                        />
-                                    </div>
+                                    <img
+                                        src={item.img}
+                                        alt={item.alt}
+                                        className="w-full h-auto object-cover rounded-2xl"
+                                    />
                                 </motion.div>
                             </div>
                         ))}
                     </Slider>
                 </div>
 
-                {/* Mobile: Vertical List - 모바일에서는 나열식으로 보이게 변경 */}
+                {/* Mobile: Vertical List */}
                 <div className="flex flex-col gap-4 md:hidden">
                     {banners.map((item, index) => (
                         <motion.div
@@ -138,33 +86,13 @@ export function EventBanners() {
                             whileInView={{ opacity: 1, x: 0 }}
                             viewport={{ once: true }}
                             transition={{ delay: index * 0.1 }}
-                            className={`${item.bgColor} rounded-2xl relative overflow-hidden h-52 flex flex-col justify-center p-6`}
+                            className="rounded-2xl overflow-hidden"
                         >
-                            {/* Badge */}
-                            <span className={`absolute top-4 left-4 z-20 inline-block ${item.badgeColor} ${item.badgeTextColor || 'text-white'} px-2 py-0.5 rounded-full text-[10px] font-bold`}>
-                                {item.id}
-                            </span>
-
-                            <div className="relative z-10 w-[60%] break-keep pt-4">
-                                <h3 className={`text-xl font-bold mb-1 leading-tight ${item.textColor}`}>
-                                    {item.title}
-                                </h3>
-                                <div className={`text-xs mb-2 leading-relaxed ${item.textColor === 'text-white' ? 'text-gray-200' : 'text-gray-600'}`}>
-                                    {item.desc}
-                                </div>
-                                {item.highlight && (
-                                    <div className={`${item.highlightColor} font-black text-2xl`}>
-                                        {item.highlight}
-                                    </div>
-                                )}
-                            </div>
-                            <div className="absolute right-0 top-0 bottom-0 w-[40%] h-full z-0 overflow-hidden">
-                                <img
-                                    src={item.img}
-                                    alt={item.title}
-                                    className={`w-full h-full ${item.imgPosition}`}
-                                />
-                            </div>
+                            <img
+                                src={item.img}
+                                alt={item.alt}
+                                className="w-full h-auto object-cover rounded-2xl"
+                            />
                         </motion.div>
                     ))}
                 </div>
@@ -172,4 +100,3 @@ export function EventBanners() {
         </section>
     );
 }
-
