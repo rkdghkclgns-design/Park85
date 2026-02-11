@@ -5,7 +5,7 @@ const services = [
     {
         title: "정기 청소",
         description: "사무실, 병원 등 상업공간 전반의 정기 청소 서비스 제공",
-        image: "./assets/services/regular_cleaning.png",
+        image: "./assets/clients/client_nurse.png",
     },
     {
         title: "정기 소독&방역",
