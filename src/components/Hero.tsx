@@ -33,7 +33,7 @@ export function Hero() {
                     playsInline
                     className="absolute inset-0 w-full h-full object-cover"
                 >
-                    <source src="./assets/맞춤형_청소_영상_제작.mp4" type="video/mp4" />
+                    <source src="./assets/cleaning_video.mp4" type="video/mp4" />
                 </video>
                 {/* Dark Overlay for readability */}
                 <div className="absolute inset-0 bg-gradient-to-b from-blue-900/60 via-purple-900/60 to-blue-900/80"></div>
