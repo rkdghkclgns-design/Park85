@@ -20,7 +20,7 @@ const testimonials = [
     {
         name: "하늘소아과",
         role: "인천 송도",
-        image: "./assets/clients/client_3.png",
+        image: "./assets/clients/client_nurse.png",
         rating: 5,
         text: "병원이다 보니 위생이 가장 중요한데, 본연의 친환경 소독 서비스 덕분에 안심하고 진료합니다.",
         featured: true,

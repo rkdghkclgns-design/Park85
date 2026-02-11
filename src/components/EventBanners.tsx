@@ -4,11 +4,34 @@ import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 
 export function EventBanners() {
-    // 각 배너는 하나의 이미지로 구성
     const banners = [
-        { id: "event-1", img: "/assets/event_cleaning.png", alt: "정기 청소 이벤트" },
-        { id: "event-2", img: "/assets/event_ac.png", alt: "비수기 에어컨 이벤트" },
-        { id: "event-3", img: "/assets/event_disinfection.png", alt: "정기 소독 이벤트" },
+        {
+            id: "EVENT 01",
+            title: "정기 청소 이벤트",
+            desc: "정기 청소 1년 계약 시",
+            highlight: "대청소 1회 무료",
+            img: "/assets/event_cleaning.png",
+            badgeColor: "bg-blue-500",
+            highlightColor: "text-yellow-300",
+        },
+        {
+            id: "EVENT 02",
+            title: "비수기 에어컨 이벤트",
+            desc: "1월~5월 / 10월~12월 미리 준비하세요.",
+            highlight: "10% 할인",
+            img: "/assets/event_ac.png",
+            badgeColor: "bg-blue-500",
+            highlightColor: "text-yellow-300",
+        },
+        {
+            id: "EVENT 03",
+            title: "정기 소독 이벤트",
+            desc: "정기 소독 1년 계약 시",
+            highlight: "첫 달 무료",
+            img: "/assets/event_disinfection.png",
+            badgeColor: "bg-blue-500",
+            highlightColor: "text-yellow-300",
+        }
     ];
 
     const settings = {
@@ -64,13 +87,30 @@ export function EventBanners() {
                                     whileInView={{ opacity: 1, y: 0 }}
                                     viewport={{ once: true }}
                                     transition={{ delay: index * 0.1 }}
-                                    className="rounded-2xl overflow-hidden cursor-pointer hover:shadow-lg transition-all"
+                                    className="rounded-2xl relative overflow-hidden h-64 cursor-pointer hover:shadow-lg transition-all group"
                                 >
+                                    {/* 배경 이미지 */}
                                     <img
                                         src={item.img}
-                                        alt={item.alt}
-                                        className="w-full h-auto object-cover rounded-2xl"
+                                        alt={item.title}
+                                        className="absolute inset-0 w-full h-full object-cover"
                                     />
+                                    {/* 어두운 오버레이 */}
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
+
+                                    {/* 텍스트 콘텐츠 */}
+                                    <div className="absolute inset-0 flex flex-col justify-end p-6 z-10">
+                                        <span className={`self-start ${item.badgeColor} text-white px-3 py-1 rounded-full text-xs font-bold mb-3`}>
+                                            {item.id}
+                                        </span>
+                                        <h3 className="text-xl font-bold text-white mb-1 leading-tight">
+                                            {item.title}
+                                        </h3>
+                                        <p className="text-sm text-gray-200 mb-2">{item.desc}</p>
+                                        <div className={`${item.highlightColor} font-black text-2xl`}>
+                                            {item.highlight}
+                                        </div>
+                                    </div>
                                 </motion.div>
                             </div>
                         ))}
@@ -86,13 +126,28 @@ export function EventBanners() {
                             whileInView={{ opacity: 1, x: 0 }}
                             viewport={{ once: true }}
                             transition={{ delay: index * 0.1 }}
-                            className="rounded-2xl overflow-hidden"
+                            className="rounded-2xl relative overflow-hidden h-52"
                         >
+                            {/* 배경 이미지 */}
                             <img
                                 src={item.img}
-                                alt={item.alt}
-                                className="w-full h-auto object-cover rounded-2xl"
+                                alt={item.title}
+                                className="absolute inset-0 w-full h-full object-cover"
                             />
+                            {/* 어두운 오버레이 */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
+
+                            {/* 텍스트 콘텐츠 */}
+                            <div className="absolute inset-0 flex flex-col justify-end p-5 z-10">
+                                <span className={`self-start ${item.badgeColor} text-white px-2 py-0.5 rounded-full text-[10px] font-bold mb-2`}>
+                                    {item.id}
+                                </span>
+                                <h3 className="text-lg font-bold text-white mb-1">{item.title}</h3>
+                                <p className="text-xs text-gray-200 mb-1">{item.desc}</p>
+                                <div className={`${item.highlightColor} font-black text-xl`}>
+                                    {item.highlight}
+                                </div>
+                            </div>
                         </motion.div>
                     ))}
                 </div>
