@@ -5,7 +5,7 @@ const services = [
     {
         title: "정기 청소",
         description: "사무실, 병원 등 상업공간 전반의 정기 청소 서비스 제공",
-        image: "./assets/services/regular_cleaning.png",
+        image: "./assets/services/regular_cleaning.png?v=20",
     },
     {
         title: "정기 소독&방역",
@@ -15,7 +15,7 @@ const services = [
     {
         title: "프리미엄 클리닝",
         description: "준공 청소, 펜션&글램핑 청소, 냉난방 공조기, 대형 유리, 카페트, 의자 등 일회성 프리미엄 클리닝",
-        image: "./assets/services/led_sign_repair.png",
+        image: "./assets/services/hvac_cleaning.png?v=20",
     },
     {
         title: "건물 관리",

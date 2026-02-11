@@ -3,14 +3,14 @@ import { ServiceItem } from "../store/cartStore";
 
 // 카트(견적 상담 신청) 서비스 목록 - 플랫 리스트
 export const allServices: ServiceItem[] = [
-    { id: "svc-1", name: "정기 청소", description: "사무실/상업공간 정기 청소", image: "./assets/services/regular_cleaning.png?v=8" },
+    { id: "svc-1", name: "정기 청소", description: "사무실/상업공간 정기 청소", image: "./assets/services/regular_cleaning.png?v=20" },
     { id: "svc-2", name: "정기 소독", description: "정기 소독 및 방역 서비스", image: "./assets/services/service_disinfection.png?v=5" },
     { id: "svc-3", name: "펜션, 글램핑 청소", description: "펜션/글램핑 시설 청소", image: "./assets/services/pension_glamping_cleaning.png?v=5" },
     { id: "svc-4", name: "준공 청소", description: "공사 후 분진 및 오염 제거", image: "./assets/services/completion_cleaning.png?v=5" },
     { id: "svc-5", name: "냉난방기 청소", description: "냉난방 공조기 분해 세척", image: "./assets/services/hvac_cleaning.png?v=5" },
     { id: "svc-6", name: "건물 외벽 청소", description: "건물 외벽 유리/패널 세척", image: "./assets/services/building_exterior.png?v=5" },
     { id: "svc-7", name: "건물 외부 창문 청소", description: "고소 작업 외부 창문 청소", image: "./assets/services/exterior_window.png?v=5" },
-    { id: "svc-8", name: "간판 및 조명 수리", description: "간판·조명 보수 및 수리", image: "./assets/services/led_sign_repair.png?v=5" },
+    { id: "svc-8", name: "간판 및 조명 수리", description: "간판·조명 보수 및 수리", image: "./assets/services/led_sign_repair.png?v=20" },
     { id: "svc-9", name: "간판 및 어닝 청소", description: "간판·어닝 오염 제거 청소", image: "./assets/services/sign_cleaning.png?v=5" },
     { id: "svc-10", name: "LED 전광판 청소", description: "LED 전광판 세척 관리", image: "./assets/services/led_billboard_cleaning.png?v=5" },
     { id: "svc-11", name: "유리창 청소", description: "대형 유리창 투명 관리", image: "./assets/services/large_glass.png?v=5" },
@@ -21,7 +21,7 @@ export const allServices: ServiceItem[] = [
 // ServiceSelection 컴포넌트용 카테고리별 서비스
 // 1. 정기 청소
 export const regularCleaningServices: ServiceItem[] = [
-    { id: "reg-1", name: "바닥청소", description: "전문 장비 활용 바닥 스크러빙", image: "./assets/services/regular_cleaning.png?v=8" },
+    { id: "reg-1", name: "바닥청소", description: "전문 장비 활용 바닥 스크러빙", image: "./assets/services/regular_cleaning.png?v=20" },
     { id: "reg-2", name: "분리수거", description: "정확한 분리배출 대행", image: "./assets/services/waste_management.png?v=5" },
     { id: "reg-3", name: "쓰레기 배출", description: "사무실 폐기물 수거 및 관리", image: "./assets/services/waste_management_new.jpg?v=5" },
     { id: "reg-4", name: "화장실 청소", description: "위생적인 화장실 살균 청소", image: "./assets/services/toilet_cleaning_new.jpg?v=5" },
