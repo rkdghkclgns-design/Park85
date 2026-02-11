@@ -4,7 +4,7 @@ import { ServiceItem } from "../store/cartStore";
 // 카트(견적 상담 신청) 서비스 목록 - 플랫 리스트
 export const allServices: ServiceItem[] = [
     { id: "svc-1", name: "정기 청소", description: "사무실/상업공간 정기 청소", image: "./assets/services/regular_cleaning.jpg?v=30" },
-    { id: "svc-2", name: "정기 소독", description: "정기 소독 및 방역 서비스", image: "./assets/services/service_disinfection_new.png?v=30" },
+    { id: "svc-2", name: "정기 소독", description: "정기 소독 및 방역 서비스", image: "./assets/services/service_disinfection_new.png?v=35" },
     { id: "svc-3", name: "펜션, 글램핑 청소", description: "펜션/글램핑 시설 청소", image: "./assets/services/pension_glamping_cleaning.png?v=5" },
     { id: "svc-4", name: "준공 청소", description: "공사 후 분진 및 오염 제거", image: "./assets/services/completion_cleaning.png?v=5" },
     { id: "svc-5", name: "냉난방기 청소", description: "냉난방 공조기 분해 세척", image: "./assets/services/hvac_cleaning.png?v=5" },
@@ -30,8 +30,8 @@ export const regularCleaningServices: ServiceItem[] = [
 
 // 2. 정기 소독 & 방역
 export const disinfectionServices: ServiceItem[] = [
-    { id: "dis-1", name: "감염병 예방", description: "법정 의무 소독 및 증명서 발급", image: "./assets/services/space_disinfection.png?v=7" },
-    { id: "dis-2", name: "공간 소독", description: "사무실 전체 공간 살균 케어", image: "./assets/services/service_disinfection.png?v=6" },
+    { id: "dis-1", name: "방역 소독", description: "일반 해충 방제", image: "./assets/services/service_disinfection_new.png?v=35" },
+    { id: "dis-2", name: "공간 소독", description: "사무실 전체 공간 살균 케어", image: "./assets/services/service_disinfection.png?v=35" },
     { id: "dis-3", name: "스팀 소독", description: "고온 스팀 살균 처리", image: "./assets/services/steam_disinfection.png?v=5" },
     { id: "dis-4", name: "연무 소독", description: "초미립자 연무 공간 살균", image: "./assets/services/fog_disinfection.png?v=6" },
     { id: "dis-5", name: "분무 소독", description: "표면 접촉부 집중 살균", image: "./assets/services/spray_disinfection.png?v=6" },

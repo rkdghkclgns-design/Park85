@@ -2,8 +2,8 @@
 import { motion } from "motion/react";
 
 const clients = [
-    { name: "씨에스 코페레이션", logo: "./assets/clients/cs_corporation.png" },
     { name: "동아지질", logo: "./assets/clients/dongajijil.png" },
+    { name: "씨에스 코페레이션", logo: "./assets/clients/cs_corporation.png" },
     { name: "나산 건축", logo: "./assets/clients/nasan.png" },
     { name: "옛골 흑염소", logo: "./assets/clients/yetgol.png" },
     { name: "플레이 캔버스", logo: "./assets/clients/playcanvas.png" },
