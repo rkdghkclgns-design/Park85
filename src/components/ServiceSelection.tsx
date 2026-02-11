@@ -117,7 +117,7 @@ function ServiceCard({ service, index, toggleItem, isSelected }: { service: Serv
                 <ImageWithFallback
                     src={service.image}
                     alt={service.name}
-                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                    className="w-full h-full object-cover transition-transform duration-300 scale-[1.08] group-hover:scale-[1.15]"
                 />
                 <div className={`absolute inset-0 flex items-center justify-center transition-all ${isSelected(service.id) ? "bg-blue-600/40" : "bg-transparent group-hover:bg-black/10"}`}>
                     {isSelected(service.id) && (
