@@ -5,17 +5,17 @@ import { ServiceItem } from "../store/cartStore";
 export const allServices: ServiceItem[] = [
     { id: "svc-1", name: "정기 청소", description: "사무실/상업공간 정기 청소", image: "./assets/services/regular_cleaning.png" },
     { id: "svc-2", name: "정기 소독", description: "정기 소독 및 방역 서비스", image: "./assets/services/special_cleaning.png" },
-    { id: "svc-3", name: "펜션, 글램핑 청소", description: "펜션/글램핑 시설 청소", image: "./assets/services/regular_cleaning.png" },
-    { id: "svc-4", name: "준공 청소", description: "공사 후 분진 및 오염 제거", image: "./assets/services/regular_cleaning.png" },
-    { id: "svc-5", name: "냉난방기 청소", description: "냉난방 공조기 분해 세척", image: "./assets/services/special_cleaning.png" },
-    { id: "svc-6", name: "건물 외벽 청소", description: "건물 외벽 유리/패널 세척", image: "./assets/services/regular_cleaning.png" },
-    { id: "svc-7", name: "건물 외부 창문 청소", description: "고소 작업 외부 창문 청소", image: "./assets/services/office_cleaning.png" },
-    { id: "svc-8", name: "간판 및 조명 수리", description: "간판·조명 보수 및 수리", image: "./assets/services/special_cleaning.png" },
-    { id: "svc-9", name: "간판 및 어닝 청소", description: "간판·어닝 오염 제거 청소", image: "./assets/services/special_cleaning.png" },
-    { id: "svc-10", name: "LED 전광판 청소", description: "LED 전광판 세척 관리", image: "./assets/services/office_cleaning.png" },
-    { id: "svc-11", name: "유리창 청소", description: "대형 유리창 투명 관리", image: "./assets/services/office_cleaning.png" },
+    { id: "svc-3", name: "펜션, 글램핑 청소", description: "펜션/글램핑 시설 청소", image: "./assets/services/pension_glamping_cleaning.png" },
+    { id: "svc-4", name: "준공 청소", description: "공사 후 분진 및 오염 제거", image: "./assets/services/completion_cleaning.png" },
+    { id: "svc-5", name: "냉난방기 청소", description: "냉난방 공조기 분해 세척", image: "./assets/services/hvac_cleaning.png" },
+    { id: "svc-6", name: "건물 외벽 청소", description: "건물 외벽 유리/패널 세척", image: "./assets/services/building_exterior.png" },
+    { id: "svc-7", name: "건물 외부 창문 청소", description: "고소 작업 외부 창문 청소", image: "./assets/services/exterior_window.png" },
+    { id: "svc-8", name: "간판 및 조명 수리", description: "간판·조명 보수 및 수리", image: "./assets/services/led_sign_repair.png" },
+    { id: "svc-9", name: "간판 및 어닝 청소", description: "간판·어닝 오염 제거 청소", image: "./assets/services/sign_cleaning.png" },
+    { id: "svc-10", name: "LED 전광판 청소", description: "LED 전광판 세척 관리", image: "./assets/services/led_billboard_cleaning.png" },
+    { id: "svc-11", name: "유리창 청소", description: "대형 유리창 투명 관리", image: "./assets/services/large_glass.png" },
     { id: "svc-12", name: "카페트 청소", description: "카페트 얼룩 제거 및 살균", image: "./assets/services/carpet_cleaning.png" },
-    { id: "svc-13", name: "의자 청소", description: "패브릭 의자 세탁 및 살균", image: "./assets/services/special_cleaning.png" },
+    { id: "svc-13", name: "의자 청소", description: "패브릭 의자 세탁 및 살균", image: "./assets/services/fabric_chair.png" },
 ];
 
 // ServiceSelection 컴포넌트용 카테고리별 서비스
