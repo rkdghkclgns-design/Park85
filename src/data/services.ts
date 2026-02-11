@@ -31,7 +31,7 @@ export const regularCleaningServices: ServiceItem[] = [
 // 2. 정기 소독 & 방역
 export const disinfectionServices: ServiceItem[] = [
     { id: "dis-1", name: "감염병 예방", description: "법정 의무 소독 및 증명서 발급", image: "./assets/services/space_disinfection.png?v=7" },
-    { id: "dis-2", name: "공간 소독", description: "사무실 전체 공간 살균 케어", image: "./assets/services/service_premium.png?v=5" },
+    { id: "dis-2", name: "공간 소독", description: "사무실 전체 공간 살균 케어", image: "./assets/services/service_disinfection.png?v=6" },
     { id: "dis-3", name: "스팀 소독", description: "고온 스팀 살균 처리", image: "./assets/services/steam_disinfection.png?v=5" },
     { id: "dis-4", name: "연무 소독", description: "초미립자 연무 공간 살균", image: "./assets/services/fog_disinfection.png?v=6" },
     { id: "dis-5", name: "분무 소독", description: "표면 접촉부 집중 살균", image: "./assets/services/spray_disinfection.png?v=6" },
