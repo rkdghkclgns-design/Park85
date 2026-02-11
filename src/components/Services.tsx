@@ -5,22 +5,22 @@ const services = [
     {
         title: "정기 청소",
         description: "사무실, 병원 등 상업공간 전반의 정기 청소 서비스 제공",
-        image: "./assets/services/regular_cleaning.png?v=20",
+        image: "./assets/services/regular_cleaning.jpg?v=30",
     },
     {
         title: "정기 소독&방역",
         description: "어린이집, 학원 등 상업공간 전반의 정기 소독 및 방역 서비스 제공",
-        image: "./assets/services/service_disinfection.png",
+        image: "./assets/services/service_disinfection_new.png?v=30",
     },
     {
         title: "프리미엄 클리닝",
         description: "준공 청소, 펜션&글램핑 청소, 냉난방 공조기, 대형 유리, 카페트, 의자 등 일회성 프리미엄 클리닝",
-        image: "./assets/services/hvac_cleaning.png?v=20",
+        image: "./assets/services/premium_cleaning.png?v=30",
     },
     {
         title: "건물 관리",
         description: "건물 외벽, 외부 창문, 간판, 어닝 청소 및 LED 간판&조명 수리 서비스 제공",
-        image: "./assets/services/building_exterior.png",
+        image: "./assets/services/building_management.png?v=30",
     },
 ];
 
