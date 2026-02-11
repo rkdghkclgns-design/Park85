@@ -31,28 +31,28 @@ export const regularCleaningServices: ServiceItem[] = [
 // 2. 정기 소독 & 방역
 export const disinfectionServices: ServiceItem[] = [
     { id: "dis-1", name: "감염병 예방", description: "법정 의무 소독 및 증명서 발급", image: "./assets/services/special_cleaning.png" },
-    { id: "dis-2", name: "공간 소독", description: "사무실 전체 공간 살균 케어", image: "./assets/services/special_cleaning.png" },
-    { id: "dis-3", name: "스팀 소독", description: "고온 스팀 살균 처리", image: "./assets/services/special_cleaning.png" },
-    { id: "dis-4", name: "연무 소독", description: "초미립자 연무 공간 살균", image: "./assets/services/special_cleaning.png" },
-    { id: "dis-5", name: "분무 소독", description: "표면 접촉부 집중 살균", image: "./assets/services/special_cleaning.png" },
+    { id: "dis-2", name: "공간 소독", description: "사무실 전체 공간 살균 케어", image: "./assets/services/space_disinfection.png" },
+    { id: "dis-3", name: "스팀 소독", description: "고온 스팀 살균 처리", image: "./assets/services/steam_disinfection.png" },
+    { id: "dis-4", name: "연무 소독", description: "초미립자 연무 공간 살균", image: "./assets/services/fog_disinfection.png" },
+    { id: "dis-5", name: "분무 소독", description: "표면 접촉부 집중 살균", image: "./assets/services/spray_disinfection.png" },
 ];
 
 // 3. 프리미엄 클리닝 (구 딥 클리닝)
 export const deepCleaningServices: ServiceItem[] = [
-    { id: "deep-1", name: "준공 청소", description: "공사 분진 및 오염 제거", image: "./assets/services/regular_cleaning.png" },
-    { id: "deep-2", name: "펜션&글램핑 청소", description: "펜션/글램핑 시설 전문 청소", image: "./assets/services/regular_cleaning.png" },
-    { id: "deep-3", name: "냉난방 공조기", description: "냉난방 공조기 분해 세척", image: "./assets/services/special_cleaning.png" },
-    { id: "deep-4", name: "대형 유리", description: "대형 유리창 투명 관리", image: "./assets/services/office_cleaning.png" },
+    { id: "deep-1", name: "준공 청소", description: "공사 분진 및 오염 제거", image: "./assets/services/completion_cleaning.png" },
+    { id: "deep-2", name: "펜션&글램핑 청소", description: "펜션/글램핑 시설 전문 청소", image: "./assets/services/pension_glamping_cleaning.png" },
+    { id: "deep-3", name: "냉난방 공조기", description: "냉난방 공조기 분해 세척", image: "./assets/services/hvac_cleaning.png" },
+    { id: "deep-4", name: "대형 유리", description: "대형 유리창 투명 관리", image: "./assets/services/large_glass.png" },
     { id: "deep-5", name: "카페트", description: "얼룩 제거 및 스팀 살균", image: "./assets/services/carpet_cleaning.png" },
-    { id: "deep-6", name: "패브릭 의자", description: "패브릭 의자 세탁 및 살균", image: "./assets/services/special_cleaning.png" },
+    { id: "deep-6", name: "패브릭 의자", description: "패브릭 의자 세탁 및 살균", image: "./assets/services/fabric_chair.png" },
 ];
 
 // 4. 건물 관리
 export const buildingManagementServices: ServiceItem[] = [
-    { id: "bld-1", name: "건물 외벽", description: "건물 외벽 유리/패널 세척", image: "./assets/services/regular_cleaning.png" },
-    { id: "bld-2", name: "외부 창문", description: "고소 작업 외부 창문 청소", image: "./assets/services/office_cleaning.png" },
-    { id: "bld-3", name: "간판 청소", description: "간판 오염 제거 및 청소", image: "./assets/services/special_cleaning.png" },
-    { id: "bld-4", name: "어닝 청소", description: "어닝 오염 제거 및 세척", image: "./assets/services/special_cleaning.png" },
-    { id: "bld-5", name: "LED 간판&조명 수리", description: "조명 시설 유지 보수 및 수리", image: "./assets/services/office_cleaning.png" },
-    { id: "bld-6", name: "LED전광판 청소", description: "LED 전광판 세척 관리", image: "./assets/services/office_cleaning.png" },
+    { id: "bld-1", name: "건물 외벽", description: "건물 외벽 유리/패널 세척", image: "./assets/services/building_exterior.png" },
+    { id: "bld-2", name: "외부 창문", description: "고소 작업 외부 창문 청소", image: "./assets/services/exterior_window.png" },
+    { id: "bld-3", name: "간판 청소", description: "간판 오염 제거 및 청소", image: "./assets/services/sign_cleaning.png" },
+    { id: "bld-4", name: "어닝 청소", description: "어닝 오염 제거 및 세척", image: "./assets/services/awning_cleaning.png" },
+    { id: "bld-5", name: "LED 간판&조명 수리", description: "조명 시설 유지 보수 및 수리", image: "./assets/services/led_sign_repair.png" },
+    { id: "bld-6", name: "LED전광판 청소", description: "LED 전광판 세척 관리", image: "./assets/services/led_billboard_cleaning.png" },
 ];
