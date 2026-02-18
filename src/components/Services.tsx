@@ -10,7 +10,7 @@ const services = [
     {
         title: "정기 소독&방역",
         description: "어린이집, 학원 등 상업공간 전반의 정기 소독 및 방역 서비스 제공",
-        image: "./assets/services/service_disinfection_new.png?v=35",
+        image: "./assets/services/fog_disinfection.png?v=36",
     },
     {
         title: "프리미엄 클리닝",
