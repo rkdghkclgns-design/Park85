@@ -23,7 +23,7 @@ export function Footer() {
                         viewport={{ once: true }}
                         transition={{ duration: 0.6, delay: 0.1 }}
                     >
-                        <img src="./assets/logo.png" alt="본연" className="h-12 w-auto mb-6 object-contain" />
+                        <img src="./assets/logo_white.png" alt="본연" className="h-12 w-auto mb-6 object-contain" />
                         <p className="text-gray-400 mb-6 leading-relaxed">
                             프리미엄 서비스 & 정기관리 크리닝 서비스, 당신의 소중한 시간을 만들어 드립니다.
                         </p>
