@@ -31,7 +31,7 @@ export function Services() {
     };
 
     return (
-        <section id="services" className="py-16 px-4 sm:px-6 lg:px-8 bg-white">
+        <section id="section-services" className="py-16 px-4 sm:px-6 lg:px-8 bg-white">
             <div className="max-w-7xl mx-auto" ref={dropdownRef}>
                 <div className="grid md:grid-cols-2 gap-8">
                     {serviceCategories.map((category, index) => (

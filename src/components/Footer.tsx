@@ -46,7 +46,7 @@ export function Footer() {
                             ].map((link, idx) => (
                                 <li key={link}>
                                     <motion.a
-                                        href="#"
+                                        href="javascript:void(0)"
                                         whileHover={{ x: 5, color: "#3B82F6" }}
                                         className="hover:text-blue-400 transition-all inline-block"
                                     >
@@ -72,7 +72,7 @@ export function Footer() {
                             ].map((link, idx) => (
                                 <li key={link}>
                                     <motion.a
-                                        href="#"
+                                        href="javascript:void(0)"
                                         whileHover={{ x: 5, color: "#3B82F6" }}
                                         className="hover:text-blue-400 transition-all inline-block"
                                     >
