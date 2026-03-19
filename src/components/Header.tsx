@@ -55,7 +55,7 @@ export function Header() {
                         className="flex-shrink-0 cursor-pointer"
                         onClick={handleLogoClick}
                     >
-                        <img src="./assets/logo.png" alt="본연" className="h-12 w-auto object-contain" />
+                        <img src="./assets/logo_header.png" alt="본연" className="h-12 w-auto object-contain" />
                     </motion.div>
 
                     {/* Desktop Navigation */}
