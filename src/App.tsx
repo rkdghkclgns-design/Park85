@@ -1,3 +1,4 @@
+import { Routes, Route } from "react-router-dom";
 import { Header } from "./components/Header";
 import { Hero } from "./components/Hero";
 import { Features } from "./components/Features";
@@ -12,12 +13,11 @@ import { Footer } from "./components/Footer";
 import { CartDrawer } from "./components/CartDrawer";
 import { ClientLogos } from "./components/ClientLogos";
 import { ScrollToTop } from "./components/ScrollToTop";
+import { ServiceDetail } from "./components/ServiceDetail";
 
-export default function App() {
+function HomePage() {
     return (
-        <div className="min-h-screen bg-white">
-            <Header />
-            <div className="h-px bg-gray-100 w-full" />
+        <>
             <Hero />
             <div className="h-px bg-gray-100 w-full" />
             <Services />
@@ -37,6 +37,19 @@ export default function App() {
             <EventBanners />
             <div className="h-px bg-gray-100 w-full" />
             <CTA />
+        </>
+    );
+}
+
+export default function App() {
+    return (
+        <div className="min-h-screen bg-white">
+            <Header />
+            <div className="h-px bg-gray-100 w-full" />
+            <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/service/:categoryId/:serviceId" element={<ServiceDetail />} />
+            </Routes>
             <Footer />
             <CartDrawer />
             <ScrollToTop />

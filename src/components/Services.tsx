@@ -1,56 +1,110 @@
-import { motion } from "motion/react";
+import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "motion/react";
+import { ChevronDown } from "lucide-react";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
-
-const services = [
-    {
-        title: "정기 청소",
-        description: "사무실, 병원 등 상업공간 전반의 정기 청소 서비스 제공",
-        image: "./assets/services/main_regular.jpg?v=1",
-    },
-    {
-        title: "정기 소독&방역",
-        description: "어린이집, 학원 등 상업공간 전반의 정기 소독 및 방역 서비스 제공",
-        image: "./assets/services/main_disinfection.jpg?v=1",
-    },
-    {
-        title: "프리미엄 클리닝",
-        description: "준공 청소, 펜션&글램핑 청소, 냉난방 공조기, 대형 유리, 카페트, 의자 등 일회성 프리미엄 클리닝",
-        image: "./assets/services/main_premium.jpg?v=1",
-    },
-    {
-        title: "건물 관리",
-        description: "건물 외벽, 외부 창문, 간판, 어닝 청소 및 LED 간판&조명 수리 서비스 제공",
-        image: "./assets/services/main_building.jpg?v=1",
-    },
-];
+import { serviceCategories } from "../data/services";
 
 export function Services() {
+    const navigate = useNavigate();
+    const [openCategory, setOpenCategory] = useState<string | null>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+                setOpenCategory(null);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    const handleToggle = (categoryId: string) => {
+        setOpenCategory(prev => prev === categoryId ? null : categoryId);
+    };
+
+    const handleSubServiceClick = (categoryId: string, serviceId: string) => {
+        setOpenCategory(null);
+        navigate(`/service/${categoryId}/${serviceId}`);
+    };
+
     return (
         <section id="services" className="py-16 px-4 sm:px-6 lg:px-8 bg-white">
-            <div className="max-w-7xl mx-auto">
+            <div className="max-w-7xl mx-auto" ref={dropdownRef}>
                 <div className="grid md:grid-cols-2 gap-8">
-                    {services.map((service, index) => (
+                    {serviceCategories.map((category, index) => (
                         <motion.div
-                            key={service.title}
+                            key={category.id}
                             initial={{ opacity: 0, y: 30 }}
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
                             transition={{ duration: 0.5, delay: index * 0.1 }}
-                            className="bg-white group cursor-pointer"
+                            className="bg-white group relative"
                         >
+                            {/* Card Image */}
                             <div className="relative rounded-2xl overflow-hidden mb-6 h-64 shadow-sm hover:shadow-md transition-shadow">
                                 <ImageWithFallback
-                                    src={service.image}
-                                    alt={service.title}
+                                    src={category.image}
+                                    alt={category.name}
                                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                                 />
                             </div>
-                            <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                                {service.title}
-                            </h3>
-                            <p className="text-gray-600">
-                                {service.description}
+
+                            {/* Title + Dropdown Button */}
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-2xl font-bold text-gray-900">
+                                    {category.name}
+                                </h3>
+                                <button
+                                    onClick={() => handleToggle(category.id)}
+                                    className="flex items-center gap-1 px-4 py-2 bg-[#1e2b4f] text-white rounded-lg text-sm font-medium hover:bg-[#151f3a] transition-colors"
+                                >
+                                    <span>서비스 보기</span>
+                                    <ChevronDown
+                                        className={`w-4 h-4 transition-transform duration-200 ${
+                                            openCategory === category.id ? "rotate-180" : ""
+                                        }`}
+                                    />
+                                </button>
+                            </div>
+                            <p className="text-gray-600 mt-2">
+                                {category.description}
                             </p>
+
+                            {/* Dropdown Menu */}
+                            <AnimatePresence>
+                                {openCategory === category.id && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: -8 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -8 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="mt-3 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden"
+                                    >
+                                        {category.subServices.map((sub, subIdx) => (
+                                            <button
+                                                key={sub.id}
+                                                onClick={() => handleSubServiceClick(category.id, sub.id)}
+                                                className={`w-full text-left px-5 py-3.5 hover:bg-blue-50 transition-colors flex items-center justify-between group/item ${
+                                                    subIdx < category.subServices.length - 1 ? "border-b border-gray-100" : ""
+                                                }`}
+                                            >
+                                                <div>
+                                                    <div className="font-medium text-gray-900 group-hover/item:text-blue-600 transition-colors">
+                                                        {sub.name}
+                                                    </div>
+                                                    <div className="text-sm text-gray-500 mt-0.5">
+                                                        {sub.description}
+                                                    </div>
+                                                </div>
+                                                <ChevronDown className="w-4 h-4 -rotate-90 text-gray-400 group-hover/item:text-blue-600 transition-colors flex-shrink-0" />
+                                            </button>
+                                        ))}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </motion.div>
                     ))}
                 </div>
