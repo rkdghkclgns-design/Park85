@@ -144,18 +144,17 @@ export function RegularCleaningDetail() {
                                 <Phone className="w-4 h-4" />
                                 전화 상담하기
                             </a>
-                            <Button
+                            <button
                                 onClick={() => {
                                     navigate("/");
                                     setTimeout(() => {
                                         document.getElementById("section-services")?.scrollIntoView({ behavior: "smooth" });
                                     }, 100);
                                 }}
-                                variant="outline"
-                                className="border-2 border-white text-white hover:bg-white hover:text-[#1e2b4f] px-6 py-3 rounded-lg font-medium transition-colors"
+                                className="inline-flex items-center justify-center gap-2 px-6 py-3 border-2 border-white text-white rounded-lg font-bold hover:bg-white hover:text-[#1e2b4f] transition-colors"
                             >
                                 다른 서비스 보기
-                            </Button>
+                            </button>
                         </div>
                     </motion.div>
                 </div>
@@ -496,13 +495,12 @@ export function RegularCleaningDetail() {
                             <Phone className="w-5 h-5" />
                             010-2740-1734
                         </a>
-                        <Button
+                        <button
                             onClick={() => navigate("/")}
-                            variant="outline"
-                            className="border-2 border-white text-white hover:bg-white hover:text-[#1e2b4f] px-8 py-4 rounded-lg font-medium transition-colors"
+                            className="inline-flex items-center justify-center gap-2 px-8 py-4 border-2 border-white text-white rounded-lg font-bold hover:bg-white hover:text-[#1e2b4f] transition-colors"
                         >
                             메인으로 돌아가기
-                        </Button>
+                        </button>
                     </div>
                 </div>
             </section>
