@@ -52,10 +52,11 @@ export function Header() {
                     {/* Logo */}
                     <motion.div
                         whileHover={{ scale: 1.05 }}
-                        className="flex-shrink-0 cursor-pointer"
+                        className="flex-shrink-0 cursor-pointer flex items-center gap-2"
                         onClick={handleLogoClick}
                     >
-                        <img src="./assets/logo.png" alt="본연" className="h-16 w-auto object-contain" />
+                        <img src="./assets/logo.png" alt="본연" className="h-14 w-auto object-contain" />
+                        <span className="text-2xl font-bold text-[#1e2b4f] tracking-wider hidden sm:inline">본 연</span>
                     </motion.div>
 
                     {/* Desktop Navigation */}
