@@ -23,10 +23,7 @@ export function Footer() {
                         viewport={{ once: true }}
                         transition={{ duration: 0.6, delay: 0.1 }}
                     >
-                        <div className="flex items-center gap-2 mb-6">
-                            <img src="./assets/logo_white.png" alt="본연" className="h-12 w-auto object-contain" />
-                            <span className="text-2xl font-bold text-white tracking-wider">본 연</span>
-                        </div>
+                        <img src="./assets/logo_white.png" alt="본연" className="h-10 w-auto mb-6 object-contain" />
                         <p className="text-gray-400 mb-6 leading-relaxed">
                             프리미엄 서비스 & 정기관리 크리닝 서비스, 당신의 소중한 시간을 만들어 드립니다.
                         </p>
