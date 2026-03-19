@@ -95,7 +95,7 @@ const serviceScopes = [
 function SectionTitle({ number, title, subtitle }: { number: string; title: string; subtitle: string }) {
     return (
         <div className="mb-8">
-            <span className="text-7xl sm:text-9xl font-black text-blue-600/15 tracking-wider leading-none">{number}</span>
+            <span className="text-[60px] sm:text-[75px] font-black text-blue-600/15 tracking-wider leading-none">{number}</span>
             <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">{title}</h2>
             <p className="text-gray-500 mt-2 max-w-2xl">{subtitle}</p>
         </div>
