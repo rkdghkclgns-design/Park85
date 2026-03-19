@@ -3,12 +3,26 @@ import { motion } from "motion/react";
 import { ArrowLeft, Construction } from "lucide-react";
 import { Button } from "./ui/button";
 import { serviceCategories } from "../data/services";
+import { RegularCleaningDetail } from "./RegularCleaningDetail";
+
+// Map of categoryId/serviceId that have full detail pages
+const DETAIL_PAGES: Record<string, React.ComponentType> = {
+    "regular/regular-cleaning": RegularCleaningDetail,
+};
 
 export function ServiceDetail() {
     const { categoryId, serviceId } = useParams<{ categoryId: string; serviceId: string }>();
     const navigate = useNavigate();
 
-    // Find category and sub-service
+    // Check if this service has a full detail page
+    const routeKey = `${categoryId}/${serviceId}`;
+    const DetailComponent = DETAIL_PAGES[routeKey];
+
+    if (DetailComponent) {
+        return <DetailComponent />;
+    }
+
+    // Find category and sub-service for the "준비중" fallback
     const category = serviceCategories.find(c => c.id === categoryId);
     const subService = category?.subServices.find(s => s.id === serviceId);
 

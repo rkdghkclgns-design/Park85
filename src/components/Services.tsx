@@ -43,8 +43,14 @@ export function Services() {
                             transition={{ duration: 0.5, delay: index * 0.1 }}
                             className={`bg-white group relative ${openCategory === category.id ? "z-30" : "z-0"}`}
                         >
-                            {/* Card Image */}
-                            <div className="relative rounded-2xl overflow-hidden mb-6 h-64 shadow-sm hover:shadow-md transition-shadow">
+                            {/* Card Image - click navigates to first sub-service */}
+                            <div
+                                className="relative rounded-2xl overflow-hidden mb-6 h-64 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                                onClick={() => {
+                                    const firstSub = category.subServices[0];
+                                    if (firstSub) navigate(`/service/${category.id}/${firstSub.id}`);
+                                }}
+                            >
                                 <ImageWithFallback
                                     src={category.image}
                                     alt={category.name}
