@@ -61,7 +61,12 @@ export function Header() {
                     {/* Desktop Navigation */}
                     <nav className="hidden lg:flex items-center space-x-1" ref={dropdownRef}>
                         {serviceCategories.map((category) => (
-                            <div key={category.id} className="relative">
+                            <div
+                                key={category.id}
+                                className="relative"
+                                onMouseEnter={() => setOpenDropdown(category.id)}
+                                onMouseLeave={() => setOpenDropdown(null)}
+                            >
                                 <button
                                     onClick={() => setOpenDropdown(prev => prev === category.id ? null : category.id)}
                                     className={`flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
@@ -84,21 +89,23 @@ export function Header() {
                                             animate={{ opacity: 1, y: 0 }}
                                             exit={{ opacity: 0, y: -4 }}
                                             transition={{ duration: 0.15 }}
-                                            className="absolute top-full left-0 mt-1 w-52 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden z-50"
+                                            className="absolute top-full left-0 pt-1 w-52 z-50"
                                         >
-                                            {category.subServices.map((sub, idx) => (
-                                                <button
-                                                    key={sub.id}
-                                                    onClick={() => handleSubServiceClick(category.id, sub.id)}
-                                                    className={`w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors ${
-                                                        idx < category.subServices.length - 1 ? "border-b border-gray-50" : ""
-                                                    }`}
-                                                >
-                                                    <div className="font-medium text-sm text-gray-900 hover:text-blue-600">
-                                                        {sub.name}
-                                                    </div>
-                                                </button>
-                                            ))}
+                                            <div className="bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                                                {category.subServices.map((sub, idx) => (
+                                                    <button
+                                                        key={sub.id}
+                                                        onClick={() => handleSubServiceClick(category.id, sub.id)}
+                                                        className={`w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors ${
+                                                            idx < category.subServices.length - 1 ? "border-b border-gray-50" : ""
+                                                        }`}
+                                                    >
+                                                        <div className="font-medium text-sm text-gray-900 hover:text-blue-600">
+                                                            {sub.name}
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </motion.div>
                                     )}
                                 </AnimatePresence>

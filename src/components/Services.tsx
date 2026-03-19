@@ -53,7 +53,10 @@ export function Services() {
                             </div>
 
                             {/* Title + Dropdown Button */}
-                            <div className="flex items-center justify-between">
+                            <div
+                                className="flex items-center justify-between"
+                                onMouseEnter={() => setOpenCategory(category.id)}
+                            >
                                 <h3 className="text-2xl font-bold text-gray-900">
                                     {category.name}
                                 </h3>
