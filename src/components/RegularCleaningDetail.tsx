@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { ArrowLeft, Phone, Building2, Store, GraduationCap, Wrench, Shield, Droplets, Wind, ClipboardCheck, Sparkles, Leaf } from "lucide-react";
+import { ArrowLeft, Phone, Building2, Store, GraduationCap, Wrench, Shield, Droplets, Wind, ClipboardCheck, Sparkles, Leaf, DollarSign, Award, HeartPulse } from "lucide-react";
 import { Button } from "./ui/button";
 
 const processSteps = [
@@ -95,7 +95,7 @@ const serviceScopes = [
 function SectionTitle({ number, title, subtitle }: { number: string; title: string; subtitle: string }) {
     return (
         <div className="mb-8">
-            <span className="text-sm font-bold text-blue-600 tracking-wider">{number}</span>
+            <span className="text-4xl sm:text-5xl font-black text-blue-600/20 tracking-wider">{number}</span>
             <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">{title}</h2>
             <p className="text-gray-500 mt-2 max-w-2xl">{subtitle}</p>
         </div>
@@ -244,33 +244,36 @@ export function RegularCleaningDetail() {
                             subtitle="전문적인 정기 관리는 비용이 아닌, 공간의 자산 가치를 높이는 전략적 투자입니다."
                         />
                         <div className="grid sm:grid-cols-3 gap-6">
-                            {[
+                            {([
                                 {
                                     title: "전문성을 통한 비용 및 시간 절감",
                                     desc: "비전문적 청소로 인한 마감재 손상 방지, 내부 직원의 업무 몰입도 향상으로 인건비 효율 극대화",
-                                    icon: "💰",
+                                    icon: DollarSign,
+                                    color: "bg-amber-500",
                                 },
                                 {
                                     title: "브랜드 가치 및 신뢰도 향상",
                                     desc: "방문객에게 전달되는 깨끗한 첫인상은 업체의 신용과 직결되며 신뢰받는 브랜드 이미지를 형성",
-                                    icon: "⭐",
+                                    icon: Award,
+                                    color: "bg-blue-500",
                                 },
                                 {
                                     title: "건강한 업무 환경 조성",
                                     desc: "미세먼지와 세균이 억제된 공간은 호흡기 질환 및 피로도를 줄여 구성원의 생산성 향상",
-                                    icon: "🌿",
+                                    icon: HeartPulse,
+                                    color: "bg-emerald-500",
                                 },
-                            ].map((item, i) => (
+                            ] as const).map((item, i) => (
                                 <motion.div
                                     key={i}
                                     initial={{ opacity: 0, y: 15 }}
                                     whileInView={{ opacity: 1, y: 0 }}
                                     viewport={{ once: true }}
                                     transition={{ delay: i * 0.1 }}
-                                    className="text-center p-6 rounded-xl bg-gradient-to-b from-blue-50/50 to-white border border-gray-100"
+                                    className="bg-gray-50 rounded-xl p-6 hover:bg-blue-50/50 transition-colors"
                                 >
-                                    <div className="text-4xl mb-4">{item.icon}</div>
-                                    <h3 className="font-bold text-gray-900 mb-3">{item.title}</h3>
+                                    <item.icon className={`w-8 h-8 text-white p-1.5 rounded-lg ${item.color} mb-3`} />
+                                    <h3 className="font-bold text-gray-900 mb-2">{item.title}</h3>
                                     <p className="text-sm text-gray-600 leading-relaxed">{item.desc}</p>
                                 </motion.div>
                             ))}
