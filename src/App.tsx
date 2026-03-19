@@ -1,4 +1,5 @@
-import { Routes, Route } from "react-router-dom";
+import { useEffect } from "react";
+import { Routes, Route, useLocation } from "react-router-dom";
 import { Header } from "./components/Header";
 import { Hero } from "./components/Hero";
 import { Features } from "./components/Features";
@@ -41,9 +42,18 @@ function HomePage() {
     );
 }
 
+function RouteScrollToTop() {
+    const { pathname } = useLocation();
+    useEffect(() => {
+        window.scrollTo(0, 0);
+    }, [pathname]);
+    return null;
+}
+
 export default function App() {
     return (
         <div className="min-h-screen bg-white">
+            <RouteScrollToTop />
             <Header />
             <div className="h-px bg-gray-100 w-full" />
             <Routes>
