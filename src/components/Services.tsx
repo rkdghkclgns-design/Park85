@@ -41,53 +41,20 @@ export function Services() {
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
                             transition={{ duration: 0.5, delay: index * 0.1 }}
-                            className="bg-white group relative"
+                            className={`bg-white group relative ${openCategory === category.id ? "z-30" : "z-0"}`}
                         >
-                            {/* Card Image + Overlay Dropdown */}
+                            {/* Card Image */}
                             <div className="relative rounded-2xl overflow-hidden mb-6 h-64 shadow-sm hover:shadow-md transition-shadow">
                                 <ImageWithFallback
                                     src={category.image}
                                     alt={category.name}
                                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                                 />
-
-                                {/* Dropdown Overlay on Image */}
-                                <AnimatePresence>
-                                    {openCategory === category.id && (
-                                        <motion.div
-                                            initial={{ opacity: 0 }}
-                                            animate={{ opacity: 1 }}
-                                            exit={{ opacity: 0 }}
-                                            transition={{ duration: 0.2 }}
-                                            className="absolute inset-0 bg-white/95 backdrop-blur-sm flex flex-col justify-center px-6"
-                                        >
-                                            {category.subServices.map((sub, subIdx) => (
-                                                <button
-                                                    key={sub.id}
-                                                    onClick={() => handleSubServiceClick(category.id, sub.id)}
-                                                    className={`w-full text-left px-4 py-3 hover:bg-blue-50 rounded-lg transition-colors flex items-center justify-between group/item ${
-                                                        subIdx < category.subServices.length - 1 ? "border-b border-gray-200" : ""
-                                                    }`}
-                                                >
-                                                    <div>
-                                                        <div className="font-bold text-gray-900 group-hover/item:text-blue-600 transition-colors">
-                                                            {sub.name}
-                                                        </div>
-                                                        <div className="text-sm text-gray-500 mt-0.5">
-                                                            {sub.description}
-                                                        </div>
-                                                    </div>
-                                                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover/item:text-blue-600 transition-colors flex-shrink-0" />
-                                                </button>
-                                            ))}
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
                             </div>
 
                             {/* Title + Dropdown Button */}
                             <div
-                                className="flex items-center justify-between"
+                                className="flex items-center justify-between relative"
                                 onMouseEnter={() => setOpenCategory(category.id)}
                             >
                                 <h3 className="text-2xl font-bold text-gray-900">
@@ -108,6 +75,39 @@ export function Services() {
                             <p className="text-gray-600 mt-2">
                                 {category.description}
                             </p>
+
+                            {/* Dropdown Menu - absolute, floats over other cards */}
+                            <AnimatePresence>
+                                {openCategory === category.id && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: -8 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -8 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="absolute left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden z-40"
+                                    >
+                                        {category.subServices.map((sub, subIdx) => (
+                                            <button
+                                                key={sub.id}
+                                                onClick={() => handleSubServiceClick(category.id, sub.id)}
+                                                className={`w-full text-left px-5 py-3.5 hover:bg-blue-50 transition-colors flex items-center justify-between group/item ${
+                                                    subIdx < category.subServices.length - 1 ? "border-b border-gray-100" : ""
+                                                }`}
+                                            >
+                                                <div>
+                                                    <div className="font-bold text-gray-900 group-hover/item:text-blue-600 transition-colors">
+                                                        {sub.name}
+                                                    </div>
+                                                    <div className="text-sm text-gray-500 mt-0.5">
+                                                        {sub.description}
+                                                    </div>
+                                                </div>
+                                                <ChevronRight className="w-4 h-4 text-gray-400 group-hover/item:text-blue-600 transition-colors flex-shrink-0" />
+                                            </button>
+                                        ))}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </motion.div>
                     ))}
                 </div>
