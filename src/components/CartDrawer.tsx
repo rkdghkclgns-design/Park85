@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useCartStore } from "../store/cartStore";
 import { Button } from "./ui/button";
 import { X, Send, Building, MapPin, Phone, User, Maximize, Check, Loader2 } from "lucide-react";
-import { allServices, serviceCategories } from "../data/services";
+import { allServices } from "../data/services";
 import { submitConsultation } from "../services/consultationService";
 
 export function CartDrawer() {
@@ -144,39 +144,33 @@ export function CartDrawer() {
                                     서비스 선택 ({items.length})
                                 </h3>
 
-                                <div className="space-y-4 max-h-60 overflow-y-auto pr-1">
-                                    {serviceCategories.map((category) => (
-                                        <div key={category.id}>
-                                            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5 px-1">
-                                                {category.name}
+                                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                                    {allServices.map((service) => {
+                                        const selected = isSelected(service.id);
+                                        return (
+                                            <div
+                                                key={service.id}
+                                                onClick={() => toggleItem(service)}
+                                                className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${selected
+                                                    ? "bg-blue-50 border-blue-200"
+                                                    : "bg-white border-gray-100 hover:bg-gray-50"
+                                                    }`}
+                                            >
+                                                <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${selected ? "bg-blue-600 border-blue-600" : "bg-white border-gray-300"
+                                                    }`}>
+                                                    {selected && <Check className="w-3.5 h-3.5 text-white" />}
+                                                </div>
+                                                <img
+                                                    src={service.image}
+                                                    alt={service.name}
+                                                    className="w-10 h-10 rounded-md object-cover"
+                                                />
+                                                <div className="flex-1">
+                                                    <div className="font-medium text-sm text-gray-900">{service.name}</div>
+                                                </div>
                                             </div>
-                                            <div className="space-y-1">
-                                                {category.subServices.map((sub) => {
-                                                    const serviceItem = allServices.find(s => s.id === sub.id);
-                                                    if (!serviceItem) return null;
-                                                    const selected = isSelected(sub.id);
-                                                    return (
-                                                        <div
-                                                            key={sub.id}
-                                                            onClick={() => toggleItem(serviceItem)}
-                                                            className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${selected
-                                                                ? "bg-blue-50 border-blue-200"
-                                                                : "bg-white border-gray-100 hover:bg-gray-50"
-                                                                }`}
-                                                        >
-                                                            <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${selected ? "bg-blue-600 border-blue-600" : "bg-white border-gray-300"
-                                                                }`}>
-                                                                {selected && <Check className="w-3.5 h-3.5 text-white" />}
-                                                            </div>
-                                                            <div className="flex-1">
-                                                                <div className="font-medium text-sm text-gray-900">{sub.name}</div>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </div>
 
