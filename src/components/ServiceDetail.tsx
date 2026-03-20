@@ -13,6 +13,10 @@ import { RegularDisinfectionDetail } from "./RegularDisinfectionDetail";
 import { CompletionCleaningDetail } from "./CompletionCleaningDetail";
 import { FloorWaxDetail } from "./FloorWaxDetail";
 import { AirconCleaningDetail } from "./AirconCleaningDetail";
+import { SignCleaningDetail } from "./SignCleaningDetail";
+import { ExteriorCleaningDetail } from "./ExteriorCleaningDetail";
+import { WindowCleaningDetail } from "./WindowCleaningDetail";
+import { SignRepairDetail } from "./SignRepairDetail";
 
 // Map of categoryId/serviceId that have full detail pages
 const DETAIL_PAGES: Record<string, React.ComponentType> = {
@@ -23,6 +27,10 @@ const DETAIL_PAGES: Record<string, React.ComponentType> = {
     "premium/completion-cleaning": CompletionCleaningDetail,
     "premium/floor-wax": FloorWaxDetail,
     "premium/aircon-cleaning": AirconCleaningDetail,
+    "building/sign-cleaning": SignCleaningDetail,
+    "building/exterior-cleaning": ExteriorCleaningDetail,
+    "building/window-cleaning": WindowCleaningDetail,
+    "building/sign-repair": SignRepairDetail,
     "air-purification/cigarette-smell": CigaretteSmellDetail,
     "air-purification/pet-smell": PetSmellDetail,
     "air-purification/new-house-syndrome": NewHouseSyndromeDetail,
