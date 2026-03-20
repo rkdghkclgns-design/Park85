@@ -251,11 +251,15 @@ export function PetSmellDetail() {
                                     transition={{ delay: i * 0.1 }}
                                     className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
                                 >
-                                    <div className={`w-12 h-12 ${step.color} rounded-xl flex items-center justify-center mb-4`}>
-                                        <step.icon className="w-6 h-6 text-white" />
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className={`w-12 h-12 ${step.color} rounded-xl flex items-center justify-center flex-shrink-0`}>
+                                            <step.icon className="w-6 h-6 text-white" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-gray-400 mb-0.5">{step.step}</p>
+                                            <h3 className="font-bold text-gray-900">{step.title}</h3>
+                                        </div>
                                     </div>
-                                    <p className="text-xs font-bold text-gray-400 mb-1">{step.step}</p>
-                                    <h3 className="font-bold text-gray-900 mb-2">{step.title}</h3>
                                     <p className="text-sm text-gray-600 leading-relaxed">{step.desc}</p>
                                 </motion.div>
                             ))}
@@ -287,9 +291,13 @@ export function PetSmellDetail() {
                                     transition={{ delay: i * 0.1 }}
                                     className="bg-gray-50 rounded-xl p-6 hover:bg-blue-50/50 transition-colors"
                                 >
-                                    <item.icon className={`w-8 h-8 text-white p-1.5 rounded-lg ${item.color} mb-3`} />
-                                    <h3 className="font-bold text-gray-900 mb-1">{item.title}</h3>
-                                    <p className="text-xs text-blue-600 font-medium mb-2">{item.subtitle}</p>
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <item.icon className={`w-8 h-8 text-white p-1.5 rounded-lg ${item.color} flex-shrink-0`} />
+                                        <div>
+                                            <h3 className="font-bold text-gray-900">{item.title}</h3>
+                                            <p className="text-xs text-blue-600 font-medium">{item.subtitle}</p>
+                                        </div>
+                                    </div>
                                     <p className="text-sm text-gray-600 leading-relaxed">{item.desc}</p>
                                 </motion.div>
                             ))}

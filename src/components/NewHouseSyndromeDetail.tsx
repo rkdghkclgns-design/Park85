@@ -229,8 +229,10 @@ export function NewHouseSyndromeDetail() {
                                     transition={{ delay: i * 0.1 }}
                                     className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
                                 >
-                                    <item.icon className={`w-8 h-8 text-white p-1.5 rounded-lg ${item.color} mb-3`} />
-                                    <h3 className="font-bold text-gray-900 mb-2">{item.title}</h3>
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <item.icon className={`w-8 h-8 text-white p-1.5 rounded-lg ${item.color} flex-shrink-0`} />
+                                        <h3 className="font-bold text-gray-900">{item.title}</h3>
+                                    </div>
                                     <p className="text-sm text-gray-600 leading-relaxed">{item.desc}</p>
                                 </motion.div>
                             ))}
@@ -349,8 +351,10 @@ export function NewHouseSyndromeDetail() {
                                     transition={{ delay: i * 0.1 }}
                                     className="bg-gray-50 rounded-xl p-6 hover:bg-blue-50/50 transition-colors"
                                 >
-                                    <item.icon className={`w-8 h-8 text-white p-1.5 rounded-lg ${item.color} mb-3`} />
-                                    <h3 className="font-bold text-gray-900 mb-2">{item.title}</h3>
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <item.icon className={`w-8 h-8 text-white p-1.5 rounded-lg ${item.color} flex-shrink-0`} />
+                                        <h3 className="font-bold text-gray-900">{item.title}</h3>
+                                    </div>
                                     <p className="text-sm text-gray-600 leading-relaxed">{item.desc}</p>
                                 </motion.div>
                             ))}

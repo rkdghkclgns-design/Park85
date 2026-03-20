@@ -166,8 +166,10 @@ export function RegularDisinfectionDetail() {
                                     transition={{ delay: i * 0.1 }}
                                     className="bg-gray-50 rounded-xl p-6 hover:bg-blue-50/50 transition-colors"
                                 >
-                                    <card.icon className="w-8 h-8 text-blue-500 mb-3" />
-                                    <h3 className="font-bold text-gray-900 mb-2">{card.title}</h3>
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <card.icon className="w-8 h-8 text-blue-500 flex-shrink-0" />
+                                        <h3 className="font-bold text-gray-900">{card.title}</h3>
+                                    </div>
                                     <p className="text-sm text-gray-600 leading-relaxed">{card.desc}</p>
                                 </motion.div>
                             ))}
