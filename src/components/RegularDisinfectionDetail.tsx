@@ -88,7 +88,12 @@ export function RegularDisinfectionDetail() {
     return (
         <div className="bg-white">
             {/* Hero Banner */}
-            <section className="relative bg-gradient-to-br from-[#1e2b4f] via-[#2a3a6b] to-[#1e2b4f] text-white overflow-hidden">
+            <section className="relative bg-[#1e2b4f] text-white overflow-hidden">
+                <div
+                    className="absolute inset-0 bg-cover bg-center"
+                    style={{ backgroundImage: "url('./assets/services/disinfection_hero_bg.jpg')" }}
+                />
+                <div className="absolute inset-0 bg-[#1e2b4f]/70" />
                 <div className="relative max-w-5xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
