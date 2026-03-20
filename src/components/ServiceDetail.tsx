@@ -9,10 +9,12 @@ import { PensionDetail } from "./PensionDetail";
 import { CigaretteSmellDetail } from "./CigaretteSmellDetail";
 import { PetSmellDetail } from "./PetSmellDetail";
 import { NewHouseSyndromeDetail } from "./NewHouseSyndromeDetail";
+import { RegularDisinfectionDetail } from "./RegularDisinfectionDetail";
 
 // Map of categoryId/serviceId that have full detail pages
 const DETAIL_PAGES: Record<string, React.ComponentType> = {
     "regular/regular-cleaning": RegularCleaningDetail,
+    "regular/regular-disinfection": RegularDisinfectionDetail,
     "regular/glamping": GlampingDetail,
     "regular/pension": PensionDetail,
     "air-purification/cigarette-smell": CigaretteSmellDetail,
