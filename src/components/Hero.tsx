@@ -31,10 +31,10 @@ export function Hero() {
                     loop
                     muted
                     playsInline
-                    poster="./assets/hero-cleaning-crew-v3-poster.jpg"
+                    poster="./assets/hero-cleaning-crew-v4-poster.jpg"
                     className="absolute inset-0 w-full h-full object-cover"
                 >
-                    <source src="./assets/hero-cleaning-crew-v3.mp4" type="video/mp4" />
+                    <source src="./assets/hero-cleaning-crew-v4.mp4" type="video/mp4" />
                 </video>
                 {/* Dark Overlay for readability */}
                 <div className="absolute inset-0 bg-gradient-to-b from-blue-900/60 via-purple-900/60 to-blue-900/80"></div>

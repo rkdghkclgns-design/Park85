@@ -112,6 +112,15 @@ export function Header() {
                             </div>
                         ))}
 
+                        <a
+                            href="https://bonyeon-clean.blogspot.com/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-2 text-sm font-medium text-gray-700 rounded-lg hover:text-blue-600 hover:bg-gray-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                        >
+                            블로그
+                        </a>
+
                         <div className="flex items-center gap-2 ml-4">
                             {/* Phone Button */}
                             <a
@@ -216,6 +225,15 @@ export function Header() {
                                     </AnimatePresence>
                                 </div>
                             ))}
+                            <a
+                                href="https://bonyeon-clean.blogspot.com/"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={() => setIsMenuOpen(false)}
+                                className="block py-3 px-4 font-medium text-gray-700 rounded-lg hover:text-blue-600 hover:bg-gray-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                            >
+                                블로그
+                            </a>
                         </nav>
                     </motion.div>
                 )}
