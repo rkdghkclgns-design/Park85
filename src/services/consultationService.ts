@@ -10,11 +10,11 @@ export interface ConsultationRequest {
 
 const consultationEndpoint = "https://bonyeon-control.cleaning-autopost-slack-relay.workers.dev/api/consultation";
 
-export async function submitConsultation(data: ConsultationRequest, submissionId: string, challengeToken: string) {
+export async function submitConsultation(data: ConsultationRequest, submissionId: string) {
     const response = await fetch(consultationEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...data, submissionId, challengeToken }),
+        body: JSON.stringify({ ...data, submissionId }),
         signal: AbortSignal.timeout(12000),
     });
     const receipt = await response.json().catch(() => null);

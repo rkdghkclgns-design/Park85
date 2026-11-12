@@ -560,7 +560,7 @@ function mountUsers(root, account, controller) {
       await api('users', { method: isNew ? 'POST' : 'PATCH', body });
       if (isNew) form.reset();
       notice.classList.remove('error');
-      notice.textContent = isNew ? '사용자를 등록했습니다.' : '사용자 설정을 저장했습니다. 역할이나 활성 상태를 변경했다면 로그인 키를 새로 발급해 주세요.';
+      notice.textContent = isNew ? '사용자를 등록했습니다.' : '사용자 설정을 저장했습니다.';
       await load();
     } catch (error) {
       notice.classList.add('error');

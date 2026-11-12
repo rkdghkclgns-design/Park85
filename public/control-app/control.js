@@ -1,4 +1,4 @@
-import { privateImage, portalFetch } from './portal-api.js';
+import { privateImage } from './portal-api.js';
 import { esc, today } from './ui.js';
 import { mountWorkflows, workResultFields, workResultList, workflowsPage } from './workflows.js';
 import { fieldGuidePage, mountFieldGuide } from './field-guide.js';
@@ -50,40 +50,6 @@ export async function mountControlDetail(root, route, api, signal, movedZone) {
   const month = new URLSearchParams(query).get('month') || today().slice(0, 7);
   try {
     const id = decodeURIComponent(encoded);
-    if (kind==='archive') {
-      if (!/^[a-f0-9]{64}$/.test(id)) throw new Error('보고 자료 주소를 확인해 주세요.');
-      root.innerHTML='<section class="card ops-upload stack"><h1>보관된 전체 보고 자료</h1><p role="status">전체 자료를 불러오는 중입니다.</p></section>';
-      const response=await portalFetch('./api/control/mail/archive?'+new URLSearchParams({ id }),{ signal,cache:'no-store' });
-      if (!response.ok) {
-        const error=await response.json().catch(()=>({}));
-        throw new Error(error.error || '보고 자료를 열 수 없습니다.');
-      }
-      const saved=await response.json();
-      if (signal.aborted) return;
-      if (!saved || typeof saved.text!=='string' || (saved.html!=null && typeof saved.html!=='string')) {
-        throw new Error('보고 자료의 형식을 확인해 주세요.');
-      }
-      root.innerHTML='<section class="card ops-upload stack mail-preview"><h1>보관된 전체 보고 자료</h1><div class="row"><button class="btn compact" data-download-html>HTML 다운로드</button><button class="btn compact" data-download-text>텍스트 다운로드</button></div><iframe title="보관된 전체 보고 자료" sandbox></iframe><pre hidden></pre></section>';
-      const {text:plain,html}=saved;
-      if (html) root.querySelector('iframe').srcdoc=html;
-      else {
-        root.querySelector('iframe').hidden=true;
-        root.querySelector('pre').hidden=false;
-        root.querySelector('pre').textContent=plain;
-        root.querySelector('[data-download-html]').hidden=true;
-      }
-      const download=(text,type,name)=>{
-        const url=URL.createObjectURL(new Blob([text],{type}));
-        const link=document.createElement('a');
-        link.href=url;
-        link.download=name;
-        link.click();
-        setTimeout(()=>URL.revokeObjectURL(url),1000);
-      };
-      root.querySelector('[data-download-html]').addEventListener('click',()=>download(html,'text/html;charset=utf-8','본연-전체보고.html'),{signal});
-      root.querySelector('[data-download-text]').addEventListener('click',()=>download(plain,'text/plain;charset=utf-8','본연-전체보고.txt'),{signal});
-      return;
-    }
     const data = await api('control/detail?' + new URLSearchParams({ kind, id, month }), { signal });
     if (signal.aborted) return;
     if (kind === 'mail') {
@@ -510,7 +476,7 @@ export function mountControl(root, account, api, signal) {
           ? '작업자 안내·세무 자료 자동 발송 사용 중' : '작업자 안내·세무 자료 자동 발송 꺼짐';
         const date = new Intl.DateTimeFormat('ko-KR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Seoul' });
         root.querySelector('[data-mail-history]').innerHTML = data.deliveries.length ? data.deliveries.map(row => {
-          const state = row.sentAt ? '발송 완료' : row.holdAt ? row.holdReason==='storage' ? '보고 분량 확인 필요' : '발송 결과 확인 필요' : row.canceledAt ? '대기 취소' : row.queued ? '발송 대기'
+          const state = row.sentAt ? '발송 완료' : row.holdAt ? '발송 결과 확인 필요' : row.canceledAt ? '대기 취소' : row.queued ? '발송 대기'
             : Date.now() - Date.parse(row.createdAt) > 900_000 ? '발송 결과 확인 필요' : '발송 처리 중';
           const subject = row.subject || mailKinds[row.kind] || row.kind;
           return `<article class="report-control-row stack"><div class="row between"><strong>${row.detailKey ? detailAnchor('mail', row.detailKey, subject) : esc(subject)}</strong>

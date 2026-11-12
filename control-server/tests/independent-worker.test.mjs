@@ -19,7 +19,12 @@ test('GitHub Pages receives scoped app sessions and protected report links', asy
   assert.equal(guests.status,401);
   assert.equal(guests.headers.get('Access-Control-Allow-Origin'),origin);
   assert.equal((await call('/api/session',{source:'https://untrusted.example'})).status,403);
-  assert.equal((await call('/verification/api/session')).status,404);
+  const qaGuest = await call('/verification/api/session');
+  assert.equal(qaGuest.status,401);
+  assert.match((await qaGuest.json()).error,/로그인/);
+  assert.equal((await call('/verification/worker/api/session')).status,401);
+  assert.equal((await call('/verification/api/control/overview')).status,404);
+  assert.equal((await call('/verification/api/session',{ method:'POST' })).status,404);
   const login = await call('/api/auth/login',{method:'POST',body:{email:'admin',key:pin}});
   assert.equal(login.status,200);
   assert.equal(login.headers.get('Set-Cookie'),null);

@@ -1,5 +1,5 @@
 import { validMailbox } from './addresses.mjs';
-import { appRequestSource, consumeAppLimit, requirePublicChallenge, usesAppLogin } from './app-login.mjs';
+import { appRequestSource, consumeAppLimit, usesAppLogin } from './app-login.mjs';
 
 const signupDocumentLimit = 5_000_000;
 const signupUploadLimit = 10_100_000;
@@ -129,25 +129,29 @@ export async function handleSignup(path, request, env, account, context) {
     }
   }
   if (path==='/api/signup/register' && request.method==='POST' && usesAppLogin(env)) {
-    const body = (await readJson(request,env,4096)) ?? {};
+    const body = (await readJson(request,env,2048)) ?? {};
     const name = signupString(body.name);
     const email = signupString(body.email).toLowerCase();
     if (!validMailbox(email) || !name || name.length > 80) throw new HttpError(400,'이름과 이메일을 확인해 주세요.');
-    await requirePublicChallenge(request,env,body,'signup_invite',context);
     const source = await appRequestSource(request,env);
     if (!await consumeAppLimit(db,'signup-invite',source,5,3600_000)) {
       throw new HttpError(429,'초대 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.');
     }
+    if (email===signupString(env.BONYEON_OWNER_EMAIL).toLowerCase()) return json({ ok:true },201);
     await db.prepare('DELETE FROM signup_invite_requests WHERE requested_at<=?').bind(new Date(Date.now()-30*86400_000).toISOString()).run();
-    await db.prepare(`
+    const saved = await db.prepare(`
       INSERT INTO signup_invite_requests(email,name,requested_at)
       SELECT ?,?,? WHERE EXISTS (SELECT 1 FROM app_signup_settings WHERE id=1 AND enabled=1)
         AND (SELECT COUNT(*) FROM signup_invite_requests WHERE requested_at>?)<200
         AND NOT EXISTS (SELECT 1 FROM members WHERE email=?)
-        AND ?<>?
       ON CONFLICT(email) DO NOTHING
-    `).bind(email,name,new Date().toISOString(),new Date(Date.now()-30*86400_000).toISOString(),email,
-      email,signupString(env.BONYEON_OWNER_EMAIL).toLowerCase()).run();
+    `).bind(email,name,new Date().toISOString(),new Date(Date.now()-30*86400_000).toISOString(),email).run();
+    if (!saved.meta.changes && !await db.prepare('SELECT 1 FROM app_signup_settings WHERE id=1 AND enabled=1').first()) {
+      throw new HttpError(403,'현재 회원가입 접수가 중지되어 있습니다.');
+    }
+    if (!saved.meta.changes && !await db.prepare('SELECT 1 FROM signup_invite_requests WHERE email=? UNION ALL SELECT 1 FROM members WHERE email=?').bind(email,email).first()) {
+      throw new HttpError(429,'초대 요청 접수가 가득 찼습니다. 본연 관리자에게 문의해 주세요.');
+    }
     return json({ ok:true },201);
   }
   if (!account.signedIn) throw new HttpError(401, '가입용 키로 본연 사이트에 로그인해 주세요.');

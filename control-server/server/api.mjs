@@ -1,7 +1,7 @@
 import { validMailbox } from './addresses.mjs';
 import { handleSignup } from './signup.mjs';
 import { handleOperations } from './operations.mjs';
-import { appRequestSource, consumeAppLimit, handleAppLogin, publicIntakeSettings, readAppLoginIdentity, requirePublicChallenge, usesAppLogin } from './app-login.mjs';
+import { appRequestSource, consumeAppLimit, handleAppLogin, readAppLoginIdentity, usesAppLogin } from './app-login.mjs';
 
 const roleRank = { viewer: 1, cleaner: 1, editor: 2, admin: 3, owner: 4 };
 const memberRoles = ['viewer', 'cleaner', 'editor', 'admin'];
@@ -281,7 +281,6 @@ async function submitPublicConsultation(request, env) {
     || !await db.prepare('SELECT 1 FROM gmail_report_runner WHERE id=1').first()) {
     throw new HttpError(503,'온라인 상담 접수에 연결하지 못했습니다. 입력 내용을 보관하고 잠시 후 다시 시도해 주세요.');
   }
-  await requirePublicChallenge(request,env,body,'consultation',{ HttpError });
   const source = await appRequestSource(request,env);
   if (!await consumeAppLimit(db,'consultation',source,5,3600_000)) {
     throw new HttpError(429,'상담 접수 시도가 많습니다. 잠시 후 다시 시도해 주세요.');
@@ -306,7 +305,6 @@ export async function handleApi(request, env, handleControl, handleWorkflows) {
     const method = request.method;
     const db = env.DB;
     if (!db || !env.BONYEON_OWNER_EMAIL) throw new HttpError(503, '본연 운영 서버 설정을 확인해 주세요.');
-    if (path==='/api/public-intake/settings' && method==='GET') return json(publicIntakeSettings(env));
     if (path==='/api/consultation' && method==='POST') return await submitPublicConsultation(request,env);
     const account = await identity(request, env);
     if (path === '/api/session' && method === 'GET') return json(account);

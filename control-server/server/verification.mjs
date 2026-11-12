@@ -124,9 +124,13 @@ async function signOutVerificationWorker(request, db, env) {
 }
 
 export async function handleVerification(request, env, serveAsset, runApi, sendCompletion) {
-  const ownerId = await verificationOwner(request,env);
-  if (!ownerId) return verificationError('사이트 소유자 전용 검증 공간입니다.', 404);
   const url = new URL(request.url);
+  const ownerId = await verificationOwner(request,env);
+  if (!ownerId) {
+    const sessionRequest = request.method === 'GET' && /^\/verification\/(?:worker\/)?api\/session$/.test(url.pathname);
+    if (usesAppLogin(env) && verificationFrontend(request,env) && sessionRequest) return verificationError('본연 관리자 계정으로 로그인해 주세요.', 401);
+    return verificationError('사이트 소유자 전용 검증 공간입니다.', 404);
+  }
   if (url.pathname === '/verification' || url.pathname === '/verification/worker') {
     url.pathname += '/';
     return Response.redirect(url, 308);

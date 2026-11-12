@@ -1,7 +1,7 @@
 import { useLocation } from "react-router-dom";
 
 export const controlPortalPath = "/service/charger/charger-cleaning";
-const embeddedRoute = /^control-detail\/(?:site|worker|report|mail|archive)\/[^/?#]+(?:\?month=\d{4}-\d{2})?$/;
+const embeddedRoute = /^control-detail\/(?:site|worker|report|mail)\/[a-zA-Z0-9%_.+@-]+(?:\?month=\d{4}-\d{2})?$/;
 
 export const controlLoginUrl = "#" + controlPortalPath;
 
