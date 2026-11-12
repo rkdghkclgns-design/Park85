@@ -6,6 +6,19 @@ import { motion, AnimatePresence } from "motion/react";
 import { useCartStore } from "../store/cartStore";
 import { serviceCategories } from "../data/services";
 
+const controlLoginUrl = "https://cleanreport-demo.smart433699.chatgpt.site/#control";
+
+function ControlLoginLink() {
+    return (
+        <a
+            href={controlLoginUrl}
+            className="shrink-0 whitespace-nowrap rounded-lg border border-[#1e2b4f] px-2 py-2 text-sm font-medium text-[#1e2b4f] transition-colors hover:bg-[#1e2b4f] hover:text-white sm:px-3"
+        >
+            로그인
+        </a>
+    );
+}
+
 export function Header() {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [openDropdown, setOpenDropdown] = useState<string | null>(null);
@@ -47,7 +60,7 @@ export function Header() {
         <header
             className="fixed top-0 left-0 right-0 z-50 transition-all duration-300 bg-white/95 backdrop-blur-lg shadow-md"
         >
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
                 <div className="flex items-center justify-between h-20">
                     {/* Logo */}
                     <motion.div
@@ -55,7 +68,7 @@ export function Header() {
                         className="flex-shrink-0 cursor-pointer"
                         onClick={handleLogoClick}
                     >
-                        <img src="./assets/logo_header.png" alt="본연" className="h-12 w-auto object-contain" />
+                        <img src="./assets/logo_header.png" alt="본연" className="h-9 w-auto max-w-[84px] object-contain sm:h-12 sm:max-w-none" />
                     </motion.div>
 
                     {/* Desktop Navigation */}
@@ -138,25 +151,27 @@ export function Header() {
                             >
                                 간편 상담
                             </Button>
+                            <ControlLoginLink />
                         </div>
                     </nav>
 
                     {/* Mobile Buttons */}
-                    <div className="flex items-center gap-2 lg:hidden">
+                    <div className="flex items-center gap-1.5 sm:gap-2 lg:hidden">
                         <a
                             href="tel:01027401734"
-                            className="p-2 rounded-lg border border-[#1e2b4f] text-[#1e2b4f] hover:bg-[#1e2b4f] hover:text-white transition-colors"
+                            className="p-1.5 sm:p-2 rounded-lg border border-[#1e2b4f] text-[#1e2b4f] hover:bg-[#1e2b4f] hover:text-white transition-colors"
                         >
                             <Phone className="h-5 w-5" />
                         </a>
                         <Button
                             onClick={() => setIsOpen(true)}
-                            className="bg-[#1e2b4f] hover:bg-[#151f3a] text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors"
+                            className="bg-[#1e2b4f] hover:bg-[#151f3a] text-white px-2.5 sm:px-4 py-2 rounded-lg font-medium text-sm transition-colors"
                         >
                             간편 상담
                         </Button>
+                        <ControlLoginLink />
                         <button
-                            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                            className="p-1.5 sm:p-2 rounded-lg hover:bg-gray-100 transition-colors"
                             onClick={() => setIsMenuOpen(!isMenuOpen)}
                         >
                             {isMenuOpen ? (
