@@ -66,10 +66,13 @@ export async function readWorkCompletion(db, siteId, day, account, context) {
     SELECT COALESCE(g.planned_units,w.planned_units) AS plannedUnits, g.units AS previousUnits,
       g.exterior AS previousExterior,g.interior AS previousInterior,g.last_date AS progressDate,
       CASE WHEN ? OR g.author_id=? THEN g.notes ELSE '' END AS progressNotes,
-      COUNT(e.id) AS units,COALESCE(SUM(e.exterior),0) AS exterior,COALESCE(SUM(e.interior),0) AS interior
-    FROM work_sites w LEFT JOIN work_plans p ON p.site_id=w.id
+      COUNT(DISTINCT upper(trim(e.asset_code))) AS units,
+      COUNT(e.id)<>COUNT(DISTINCT upper(trim(e.asset_code))) AS duplicateEvidence,
+      CASE WHEN COUNT(e.id)=COUNT(DISTINCT upper(trim(e.asset_code))) THEN COALESCE(SUM(e.exterior),0) ELSE 0 END AS exterior,
+      CASE WHEN COUNT(e.id)=COUNT(DISTINCT upper(trim(e.asset_code))) THEN COALESCE(SUM(e.interior),0) ELSE 0 END AS interior
+    FROM work_sites w LEFT JOIN work_plan_cycles p ON p.site_id=w.id
     LEFT JOIN work_progress g ON g.site_id=w.id
-    LEFT JOIN charger_evidence e ON e.site_id=w.id AND e.work_date BETWEEN COALESCE(g.first_date,?) AND ?
+    LEFT JOIN charger_evidence e ON e.site_id=w.id AND e.work_date BETWEEN COALESCE(g.first_date,p.evidence_from,?) AND ?
       AND (g.site_id IS NOT NULL OR ? OR e.author_id=?)
     WHERE w.id=? AND (? OR p.worker_email=?) GROUP BY w.id
   `).bind(admin,account.id,day,day,admin,account.id,siteId,admin,account.email).first();
@@ -123,22 +126,27 @@ export async function savePartialWork(db, body, account, context) {
   const now = new Date().toISOString();
   const result = await db.prepare(`
     INSERT INTO work_progress(site_id,first_date,last_date,planned_units,units,exterior,interior,notes,author_id,author_name,updated_at)
-    SELECT w.id,COALESCE(g.first_date,?),?,COALESCE(g.planned_units,w.planned_units),?,?,?,?,?,?,?
+    SELECT w.id,COALESCE(g.first_date,p.evidence_from,?),?,COALESCE(g.planned_units,w.planned_units),?,?,?,?,?,?,?
     FROM work_sites w LEFT JOIN work_plan_cycles p ON p.site_id=w.id LEFT JOIN work_progress g ON g.site_id=w.id
     WHERE w.id=? AND ? < COALESCE(g.planned_units,w.planned_units)
       AND ((p.site_id IS NULL AND ?) OR ((? OR p.worker_email=?) AND ?>=p.next_due))
       AND (? OR EXISTS (SELECT COUNT(*) FROM charger_evidence e WHERE e.site_id=w.id
-        AND e.work_date BETWEEN COALESCE(g.first_date,?) AND ? AND (g.site_id IS NOT NULL OR e.author_id=?)
-        HAVING COUNT(*)>=? AND COALESCE(SUM(e.exterior),0)>=? AND COALESCE(SUM(e.interior),0)>=?))
+        AND e.work_date BETWEEN COALESCE(g.first_date,p.evidence_from,?) AND ? AND (g.site_id IS NOT NULL OR e.author_id=?)
+        HAVING COUNT(*)=COUNT(DISTINCT upper(trim(e.asset_code)))
+          AND COUNT(*)>=? AND COALESCE(SUM(e.exterior),0)>=? AND COALESCE(SUM(e.interior),0)>=?))
+      AND NOT EXISTS (SELECT 1 FROM charger_evidence e WHERE e.site_id=w.id
+        AND e.work_date BETWEEN COALESCE(g.first_date,p.evidence_from,?) AND ?
+        GROUP BY upper(trim(e.asset_code)) HAVING COUNT(*)>1)
       AND NOT EXISTS(SELECT 1 FROM settlement_months WHERE month=substr(?,1,7))
       AND NOT EXISTS(SELECT 1 FROM field_reports r WHERE r.site_id=w.id AND (
-        r.assignment_due=p.next_due OR r.work_date BETWEEN COALESCE(g.first_date,?) AND ?))
+        r.assignment_due=p.next_due OR r.work_date BETWEEN COALESCE(g.first_date,p.evidence_from,?) AND ?))
     ON CONFLICT(site_id) DO UPDATE SET last_date=excluded.last_date,units=excluded.units,exterior=excluded.exterior,
       interior=excluded.interior,notes=excluded.notes,author_id=excluded.author_id,author_name=excluded.author_name,updated_at=excluded.updated_at
     WHERE excluded.last_date>=work_progress.last_date AND excluded.units>=work_progress.units
       AND excluded.exterior>=work_progress.exterior AND excluded.interior>=work_progress.interior
   `).bind(workDate,workDate,units,exterior,interior,notes,account.id,account.name || account.email,now,siteId,units,
-    admin,admin,account.email,workDate,admin,workDate,workDate,account.id,units,exterior,interior,workDate,workDate,workDate).run();
+    admin,admin,account.email,workDate,admin,workDate,workDate,account.id,units,exterior,interior,
+    workDate,workDate,workDate,workDate,workDate).run();
   if (!result.meta.changes) throw new context.HttpError(409, '배정 수량보다 작은 누적 완료 수량을 입력해 주세요. 이미 제출·마감됐거나 이전 완료 수량보다 줄어든 경우도 저장할 수 없습니다.');
   return { partial: true };
 }
