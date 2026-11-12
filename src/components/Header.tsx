@@ -6,12 +6,12 @@ import { motion, AnimatePresence } from "motion/react";
 import { useCartStore } from "../store/cartStore";
 import { serviceCategories } from "../data/services";
 
-const controlLoginUrl = "https://cleanreport-demo.smart433699.chatgpt.site/#control";
+import { controlLoginUrl } from "./ControlPortal";
 
 function ControlLoginLink() {
     return (
         <a
-            href={controlLoginUrl}
+            href={controlLoginUrl()}
             className="shrink-0 whitespace-nowrap rounded-lg border border-[#1e2b4f] px-2 py-2 text-sm font-medium text-[#1e2b4f] transition-colors hover:bg-[#1e2b4f] hover:text-white sm:px-3"
         >
             로그인

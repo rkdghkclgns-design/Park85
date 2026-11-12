@@ -15,6 +15,7 @@ import { CartDrawer } from "./components/CartDrawer";
 import { ClientLogos } from "./components/ClientLogos";
 import { ScrollToTop } from "./components/ScrollToTop";
 import { ServiceDetail } from "./components/ServiceDetail";
+import { ControlPortal, controlPortalPath } from "./components/ControlPortal";
 
 function HomePage() {
     return (
@@ -51,6 +52,9 @@ function RouteScrollToTop() {
 }
 
 export default function App() {
+    const { pathname } = useLocation();
+    if (pathname === controlPortalPath) return <ControlPortal />;
+
     return (
         <div className="min-h-screen bg-white">
             <RouteScrollToTop />
