@@ -241,11 +241,14 @@ function reportRows(reports, admin, filter = '') {
         </form>`);
     }
     if (admin && report.status === 'approved') {
-      controls.push(`<button class="btn compact" type="button" data-contractor-mail="${id}">계약자 메일 미리보기</button>`);
+      controls.push(report.plannedUnits>0 && report.units===report.plannedUnits
+        ? `<button class="btn compact" type="button" data-contractor-mail="${id}">계약자 메일 미리보기</button>`
+        : '<span class="small">클라이언트 메일 보류 · 전체 배정 수량 확인 필요</span>');
       if (report.contractPrice == null || report.workerPrice == null) {
         controls.push(`<button class="btn compact" type="button" data-review="rates" data-id="${id}">미확정 단가 반영</button>`);
       }
     }
+    if (admin) controls.push(`<button class="btn compact" type="button" data-site-recipients="${esc(report.siteId)}">클라이언트 수신처 설정</button>`);
     if (!admin && report.status !== 'approved') {
       controls.push(`<button class="btn compact" type="button" data-edit-report="${id}">보고 수정</button>`);
     }
@@ -357,7 +360,7 @@ export function mountControl(root, account, api, signal) {
         <div class="stack" data-office-test-results aria-live="polite"></div>
       </details>` : ''}
     </section>
-    <details class="card ops-upload" id="control-recipients"><summary><strong>현장과 수신 이메일 설정</strong></summary>
+    <details class="card ops-upload" id="control-recipients"><summary><strong>현장별 클라이언트·보고 수신처 설정</strong></summary>
       <div class="stack region-refresh">
         <form class="row" data-control="settings">
           ${textField('관리자 보고 수신 이메일', 'email', 'email', 'required maxlength="254"')}
@@ -370,9 +373,13 @@ export function mountControl(root, account, api, signal) {
         <form class="row" data-control="site">
           <label class="field"><span>현장</span><select name="siteId" required></select></label>
           <label class="field"><span>단가 적용 구역</span><select name="region"></select></label>
-          ${textField('계약자 보고 수신 이메일', 'contractorEmail', 'email', 'maxlength="254"')}
+          <label class="field grow"><span>최종 완료 보고를 받을 클라이언트 이메일 <span class="small muted">선택 · 최대 20개</span></span>
+            <textarea name="contractorEmails" rows="3" maxlength="5200" autocomplete="off" autocapitalize="none" spellcheck="false"
+              placeholder="client1@company.com&#10;client2@company.com" aria-describedby="client-recipient-help"></textarea></label>
           <button class="btn compact" type="submit">현장 설정 저장</button>
         </form>
+        <p class="small muted" id="client-recipient-help">이메일을 한 줄에 하나씩 입력하세요. 쉼표·세미콜론으로도 구분할 수 있습니다. 최종 완료를 관리자가 승인하면 다음 자동 실행에서 주소별로 각각 발송합니다. 부분 완료·확인 대기·보완 요청 상태에서는 발송하지 않습니다.</p>
+        <p class="small" data-client-recipient-count aria-live="polite"></p>
       </div>
     </details>` : ''}
   `;
@@ -396,6 +403,7 @@ export function mountControl(root, account, api, signal) {
   let completionData;
   let settingsDirty = false;
   let siteDirty = false;
+  let siteEditVersion = 0;
   const inProgress = new WeakSet();
 
   function notify(text, error = false) {
@@ -411,8 +419,22 @@ export function mountControl(root, account, api, signal) {
   function fillSiteSettings() {
     const site = model.sites.find(item => item.id === siteForm.elements.siteId.value);
     siteForm.elements.region.value = site?.region || '';
-    siteForm.elements.contractorEmail.value = site?.contractorEmail || '';
+    siteForm.elements.contractorEmails.value = (site?.contractorEmails || (site?.contractorEmail ? [site.contractorEmail] : [])).join('\n');
+    updateClientRecipientCount();
   }
+
+  function clientEmailEntries() {
+    return [...new Set(siteForm.elements.contractorEmails.value.split(/[,;\r\n]+/).map(value=>value.trim().toLowerCase()).filter(Boolean))];
+  }
+
+  function updateClientRecipientCount() {
+    const count = clientEmailEntries().length;
+    siteForm.elements.contractorEmails.setCustomValidity('');
+    root.querySelector('[data-client-recipient-count]').textContent = count
+      ? `클라이언트 수신처 ${count}개 / 최대 20개 · 주소별 개별 발송`
+      : '클라이언트 수신처 미지정 · 이 현장의 고객 결과 메일을 발송하지 않습니다.';
+  }
+  siteForm?.elements.contractorEmails.addEventListener('input',updateClientRecipientCount,{ signal });
 
   function showSection(id) {
     const section = root.querySelector('#' + id);
@@ -531,7 +553,9 @@ export function mountControl(root, account, api, signal) {
     if (signal.aborted || attempt !== previewIndex) return;
     preview = { kind, reference, recipient: data.recipient, previewToken: data.previewToken };
     mailBox.querySelector('[data-mail-subject]').textContent = data.subject;
-    mailBox.querySelector('[data-mail-recipient]').textContent = '받는 사람 · ' + (data.recipient || '수신 이메일 미등록');
+    mailBox.querySelector('[data-mail-recipient]').textContent = data.recipients?.length
+      ? `받는 사람 ${data.recipients.length}명 · 주소별 개별 발송 · ` + data.recipients.join(', ')
+      : '받는 사람 · ' + (data.recipient || '수신 이메일 미등록');
     for (const [key, messages] of [['warnings', data.warnings], ['blocking', data.blocking]]) {
       const list = mailBox.querySelector('[data-mail-' + key + ']');
       list.innerHTML = (messages ?? []).map(message => `<li>${esc(message)}</li>`).join('');
@@ -678,9 +702,11 @@ export function mountControl(root, account, api, signal) {
   reportFilter?.addEventListener('change', updateReportList, { signal });
   settings?.addEventListener('input', () => { settingsDirty = true; }, { signal });
   siteForm?.addEventListener('input', event => {
+    siteEditVersion++;
     if (event.target.name !== 'siteId') siteDirty = true;
   }, { signal });
   siteForm?.elements.siteId.addEventListener('change', () => {
+    siteEditVersion++;
     siteDirty = false;
     fillSiteSettings();
   }, { signal });
@@ -737,10 +763,26 @@ export function mountControl(root, account, api, signal) {
         await api('control/review', { method: 'PATCH', body: { id: form.dataset.id, action: 'revise', note: data.note } });
         notify('보완을 요청했습니다.');
       } else if (action === 'site') {
-        await api('control/site', { method: 'PATCH', body: { ...data, region: data.region || null } });
-        siteDirty = false;
-        clearPreview();
-        notify('현장 구역과 계약자 이메일을 저장했습니다.');
+        const savedEditVersion = siteEditVersion;
+        const recipients = clientEmailEntries();
+        const checker = document.createElement('input');
+        checker.type = 'email';
+        const invalid = recipients.find(email=>{ checker.value=email; return !checker.checkValidity(); });
+        if (recipients.length>20 || invalid) {
+          focusFieldIssue(form.elements.contractorEmails,recipients.length>20 ? '수신 이메일은 최대 20개까지 지정할 수 있습니다.' : '이메일 주소를 확인해 주세요: '+invalid);
+          return;
+        }
+        try {
+          await api('control/site', { method: 'PATCH', body: { siteId:data.siteId,region:data.region || null,contractorEmails:recipients } });
+        } catch (error) {
+          if (error.status===400) focusFieldIssue(form.elements.contractorEmails,error.message);
+          throw error;
+        }
+        if (siteEditVersion===savedEditVersion && form.elements.siteId.value===data.siteId) {
+          siteDirty = false;
+          clearPreview();
+        }
+        notify(`현장 설정과 클라이언트 수신처 ${recipients.length}개를 저장했습니다.`);
       } else if (action === 'settings') {
         await api('control/settings', { method: 'PATCH', body: { email: data.email, taxEmail: data.taxEmail,
           workerMailEnabled: form.elements.workerMailEnabled.checked, officeAutoEnabled: form.elements.officeAutoEnabled.checked } });
@@ -753,6 +795,16 @@ export function mountControl(root, account, api, signal) {
   }, { signal });
 
   root.addEventListener('click', event => {
+    const recipientButton = event.target.closest('button[data-site-recipients]');
+    if (recipientButton && siteForm) {
+      siteEditVersion++;
+      siteForm.elements.siteId.value = recipientButton.dataset.siteRecipients;
+      siteDirty = false;
+      fillSiteSettings();
+      showSection('control-recipients');
+      siteForm.elements.contractorEmails.focus();
+      return;
+    }
     const testButton = event.target.closest('button[data-office-test]');
     if (testButton) {
       work(testButton, () => updateOfficeTest(testButton.dataset.officeTest === 'start'));
@@ -833,10 +885,11 @@ export function mountControl(root, account, api, signal) {
       const message = preview;
       try {
         const result = await api('control/mail', { method: 'POST', body: message });
-        notify(result.alreadySent ? '이미 발송된 보고 메일입니다.' : result.alreadyQueued ? '이미 발송을 기다리는 메일입니다.'
+        notify(result.partial ? `${result.sentCount}개 수신처로 발송했습니다. 남은 ${result.remainingCount}개 수신처 발송을 이어서 진행할 수 있습니다.`
+          : result.alreadySent ? '이미 발송된 보고 메일입니다.' : result.alreadyQueued ? '이미 발송을 기다리는 메일입니다.'
           : result.queued ? '메일을 발송 대기열에 추가했습니다.' : '메일 서비스에 발송을 접수했습니다.');
-        if (preview === message) clearPreview();
-        showSection('mail-history');
+        if (preview === message && !result.partial) clearPreview();
+        if (!result.partial) showSection('mail-history');
         await refresh();
       } catch (error) {
         if (preview === message) button.disabled = false;

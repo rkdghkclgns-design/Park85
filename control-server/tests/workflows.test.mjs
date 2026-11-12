@@ -221,8 +221,8 @@ test('the Gmail runner claims each report once and only its receipt can acknowle
     .bind().run();
   await db.prepare(`
     INSERT INTO field_reports(id, site_id, work_date, author_id, author_name, site_name, site_address,
-      units, exterior, interior, notes, status, updated_at, approved_at, contract_price, worker_price)
-    VALUES ('report-1', 'site-1', ?, 'worker', '작업자', '현장 1', '서울', 1, 1, 0, '내부 메모', 'approved', ?, ?, 21000, 9000)
+      units, exterior, interior, notes, status, updated_at, approved_at, contract_price, worker_price,planned_units)
+    VALUES ('report-1', 'site-1', ?, 'worker', '작업자', '현장 1', '서울', 1, 1, 0, '내부 메모', 'approved', ?, ?, 21000, 9000,1)
   `).bind(priorDate, now.toISOString(), now.toISOString()).run();
   await db.prepare("INSERT INTO settlement_months(month, closed_at, closed_by) VALUES (?, ?, '관리자')")
     .bind(priorDate.slice(0, 7), now.toISOString()).run();
