@@ -172,8 +172,14 @@ export async function handleCameraWork(path, request, env, account, admin, conte
       }
       return { id: match.id, slot: match.slot, createdAt: match.createdAt };
     }
+    async function confirmStored(photo) {
+      const key = cameraPhotoKey(photo.id);
+      const stored = env.BUCKET.head ? await env.BUCKET.head(key) : await env.BUCKET.get(key);
+      if (!stored) await env.BUCKET.put(key, bytes, { httpMetadata: { contentType: 'image/jpeg' } });
+      return json(photo);
+    }
     const existing = await previouslySaved();
-    if (existing) return json(existing);
+    if (existing) return confirmStored(existing);
     await validateWorkZone(db,site,zone,HttpError);
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
@@ -195,16 +201,18 @@ export async function handleCameraWork(path, request, env, account, admin, conte
       `).bind(id, date, asset, zone, author, slot, createdAt, uploadId, uploadHash, site, Number(admin), account.email, zone,zone,date,date,
         date, asset, zone, author, slot, before, date, asset, zone, author, before).run();
       if (!saved.meta.changes) {
+        await Promise.allSettled([env.BUCKET.delete(cameraPhotoKey(id))]);
         const concurrent = await previouslySaved();
-        if (concurrent) {
-          await Promise.allSettled([env.BUCKET.delete(cameraPhotoKey(id))]);
-          return json(concurrent);
-        }
+        if (concurrent) return confirmStored(concurrent);
         await validateWorkZone(db,site,zone,HttpError);
         throw new HttpError(409, '작업 전 사진, 배정 및 승인 상태를 확인해 주세요. 한 항목에 6장까지 등록할 수 있습니다.');
       }
     } catch (error) {
-      await Promise.allSettled([env.BUCKET.delete(cameraPhotoKey(id))]);
+      // D1 may have committed even when the caller lost its response.
+      const metadata = await db.prepare('SELECT id FROM work_camera_photos WHERE id=?')
+        .bind(id).first().catch(() => undefined);
+      if (metadata) return json({ id, slot, createdAt }, 201);
+      if (metadata === null) await Promise.allSettled([env.BUCKET.delete(cameraPhotoKey(id))]);
       throw error;
     }
     return json({ id, slot, createdAt }, 201);

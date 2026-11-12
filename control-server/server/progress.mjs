@@ -10,8 +10,9 @@ export const workerCanMoveEvidenceZone = `
 `;
 
 export function internalWorkUnits(row, workers = JSON.parse(row.worker_breakdown || '[]')) {
-  return workers.length ? workers.reduce((sum,worker) => sum+(worker.internal ? worker.units : 0),0)
-    : row.internal_units ?? row.recordedInternalUnits ?? (row.internal_work || row.internalWork ? row.units : 0);
+  return row.internal_units ?? row.recordedInternalUnits ?? (workers.length
+    ? workers.reduce((sum,worker) => sum+(worker.internal ? worker.units : 0),0)
+    : row.internal_work || row.internalWork ? row.units : 0);
 }
 
 export async function readWorkerEarnings(db,month,account) {

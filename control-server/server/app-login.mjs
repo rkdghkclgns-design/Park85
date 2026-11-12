@@ -35,7 +35,7 @@ export async function readAppLoginIdentity(request,env) {
     SELECT k.email,k.key_hash AS keyHash,COALESCE(m.user_id,k.user_id) AS id,m.name,m.role,m.active
     FROM app_login_sessions s JOIN app_login_keys k ON k.email=s.email AND k.key_hash=s.key_hash
     LEFT JOIN members m ON m.email=k.email
-    WHERE s.token_hash=? AND s.expires_at>?
+    WHERE s.token_hash=? AND s.expires_at>? AND k.invite_verified=1
   `).bind(await appLoginHash(token),new Date().toISOString()).first();
   if (!row) return null;
   const owner = row.email===appLoginEmail(env.BONYEON_OWNER_EMAIL);
@@ -57,18 +57,29 @@ function appLoginResponse(json,data,token,frontend) {
     : json(data,200,{ 'Set-Cookie':appLoginCookieHeader(token,appSessionSeconds) });
 }
 
-async function signInAppAdmin(pin,env,{ json,HttpError },frontend) {
+export async function appRequestSource(request, env) {
+  const address = request.headers.get('CF-Connecting-IP') || 'unknown';
+  return appLoginHash((env.BONYEON_ADMIN_PIN_PEPPER || '')+'\0'+address.slice(0,64));
+}
+
+export async function consumeAppLimit(db, scope, source, max, windowMs, now = new Date()) {
+  const time = now.toISOString();
+  return db.prepare(`
+    INSERT INTO app_request_limits(scope,source,attempts,reset_at) VALUES (?,?,1,?)
+    ON CONFLICT(scope,source) DO UPDATE SET
+      attempts=CASE WHEN reset_at<=? THEN 1 ELSE attempts+1 END,
+      reset_at=CASE WHEN reset_at<=? THEN excluded.reset_at ELSE reset_at END
+    WHERE reset_at<=? OR attempts<?
+    RETURNING attempts
+  `).bind(scope,source,new Date(+now+windowMs).toISOString(),time,time,time,max).first();
+}
+
+async function signInAppAdmin(pin,request,env,{ json,HttpError },frontend) {
   const db=env.DB;
   const now=new Date();
   const time=now.toISOString();
-  const attempt=await db.prepare(`
-    INSERT INTO app_admin_login_limit(id,attempts,reset_at) VALUES (1,1,?)
-    ON CONFLICT(id) DO UPDATE SET
-      attempts=CASE WHEN reset_at<=? THEN 1 ELSE attempts+1 END,
-      reset_at=CASE WHEN reset_at<=? THEN excluded.reset_at ELSE reset_at END
-    WHERE reset_at<=? OR attempts<5
-    RETURNING attempts
-  `).bind(new Date(+now+15*60_000).toISOString(),time,time,time).first();
+  const source=await appRequestSource(request,env);
+  const attempt=await consumeAppLimit(db,'admin',source,5,15*60_000,now);
   if (!attempt) throw new HttpError(429,'로그인 시도가 너무 많습니다. 15분 뒤 다시 시도해 주세요.');
   const pinHash=await appLoginHash(env.BONYEON_ADMIN_PIN_PEPPER+'\0'+pin);
   if (!matchesAppLoginHash(pinHash,env.BONYEON_ADMIN_PIN_HASH)) throw new HttpError(401,'아이디와 비밀번호를 확인해 주세요.');
@@ -82,7 +93,7 @@ async function signInAppAdmin(pin,env,{ json,HttpError },frontend) {
   `).bind(email,email,email,env.BONYEON_OWNER_ACCOUNT_ID,pinHash,time).run();
   const token=await createAppLoginSession(db,email,pinHash,now);
   if (!token) throw new HttpError(409,'관리자 로그인 설정이 변경되었습니다. 다시 시도해 주세요.');
-  await db.prepare('DELETE FROM app_admin_login_limit WHERE id=1').bind().run();
+  await db.prepare("DELETE FROM app_request_limits WHERE (scope='admin' AND source=?) OR reset_at<=?").bind(source,time).run();
   return appLoginResponse(json,{ ok:true },token,frontend);
 }
 
@@ -97,10 +108,10 @@ async function createAppLoginSession(db,email,keyHash,now) {
   return created.meta.changes ? token : null;
 }
 
-async function signInAppUser(body,env,{ json,HttpError },frontend) {
+async function signInAppUser(body,request,env,{ json,HttpError },frontend) {
   const email = appLoginEmail(body?.email);
   if (email==='admin' && hasAdminPin(env)) {
-    return signInAppAdmin(typeof body?.key==='string' && body.key.length<=80 ? body.key : '',env,{ json,HttpError },frontend);
+    return signInAppAdmin(typeof body?.key==='string' && body.key.length<=80 ? body.key : '',request,env,{ json,HttpError },frontend);
   }
   const key = typeof body?.key==='string' && body.key.length<=80 ? body.key.replace(/[\s-]/g,'').toLowerCase() : '';
   const invalid = () => new HttpError(401,'이메일과 로그인 키를 확인해 주세요.');
@@ -119,7 +130,7 @@ async function signInAppUser(body,env,{ json,HttpError },frontend) {
   }
   const member = await db.prepare(`
     SELECT k.user_id AS id FROM app_login_keys k LEFT JOIN members m ON m.email=k.email
-    WHERE k.email=? AND k.key_hash=? AND (? OR m.email IS NULL OR m.active=1)
+    WHERE k.email=? AND k.key_hash=? AND k.invite_verified=1 AND (? OR m.email IS NULL OR m.active=1)
   `).bind(email,keyHash,Number(owner)).first();
   if (!member) throw invalid();
   await db.prepare('UPDATE members SET user_id=? WHERE email=? AND user_id IS NULL')
@@ -145,10 +156,11 @@ async function issueAppLoginKey(body,env,account,{ json,HttpError,requireRole },
       (SELECT a.user_id FROM signup_applications a WHERE a.email=? ORDER BY a.created_at DESC LIMIT 1),?),?,?
     FROM (SELECT 1) LEFT JOIN members m ON m.email=? LEFT JOIN app_login_keys k ON k.email=?
     WHERE ? OR (m.active=1 AND (m.role<>'admin' OR ?)) OR (? AND m.email IS NULL)
-    ON CONFLICT(email) DO UPDATE SET user_id=excluded.user_id,key_hash=excluded.key_hash,issued_at=excluded.issued_at
+    ON CONFLICT(email) DO UPDATE SET user_id=excluded.user_id,key_hash=excluded.key_hash,issued_at=excluded.issued_at,invite_verified=1
   `).bind(email,owner ? account.id : null,email,'bonyeon:'+crypto.randomUUID(),keyHash,now.toISOString(),
     email,email,Number(owner),Number(account.role==='owner'),Number(body?.applicant===true)).run();
   if (!issued.meta.changes) throw new HttpError(403,'이 사용자의 로그인 키를 발급할 수 없습니다. 등록 상태와 권한을 확인해 주세요.');
+  await db.prepare('DELETE FROM signup_invite_requests WHERE email=?').bind(email).run();
   const token = email===account.email ? await createAppLoginSession(db,email,keyHash,now) : null;
   return appLoginResponse(json,{ key },token,frontend);
 }
@@ -158,7 +170,7 @@ export async function handleAppLogin(path,request,env,account,context) {
   if (!usesAppLogin(env) || request.method!=='POST') throw new HttpError(404,'요청한 로그인 기능을 찾을 수 없습니다.');
   const body = await readJson(request,env,4096);
   const frontend = usesFrontendToken(request,env);
-  if (path==='/api/auth/login') return signInAppUser(body,env,context,frontend);
+  if (path==='/api/auth/login') return signInAppUser(body,request,env,context,frontend);
   if (path==='/api/auth/key') return issueAppLoginKey(body,env,account,context,frontend);
   if (path==='/api/auth/logout') {
     const token = appLoginToken(request,env);

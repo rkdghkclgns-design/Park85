@@ -1,7 +1,7 @@
 import { validMailbox } from './addresses.mjs';
 import { handleSignup } from './signup.mjs';
 import { handleOperations } from './operations.mjs';
-import { handleAppLogin, readAppLoginIdentity, usesAppLogin } from './app-login.mjs';
+import { appRequestSource, consumeAppLimit, handleAppLogin, readAppLoginIdentity, usesAppLogin } from './app-login.mjs';
 
 const roleRank = { viewer: 1, cleaner: 1, editor: 2, admin: 3, owner: 4 };
 const memberRoles = ['viewer', 'cleaner', 'editor', 'admin'];
@@ -246,12 +246,66 @@ async function importSites(db, request, env, account) {
   return json({ count: data.length, updatedAt: updated });
 }
 
+async function submitPublicConsultation(request, env) {
+  const body = (await readJson(request,env,8000)) ?? {};
+  const { submissionId, services } = body;
+  if (typeof submissionId!=='string' || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(submissionId)) {
+    throw new HttpError(400,'상담 접수 번호를 확인해 주세요.');
+  }
+  const readField = (key, limit, required=false) => {
+    const value = typeof body[key]==='string' ? body[key].trim() : '';
+    if ((required && !value) || value.length>limit || /[\x00-\x1f\x7f]/.test(value)) throw new HttpError(400,'상담 입력 내용을 확인해 주세요.');
+    return value;
+  };
+  const name = readField('name',80,true);
+  const contact = readField('contact',80,true);
+  if (!Array.isArray(services) || services.length>30 || services.some(item=>typeof item!=='string' || !item.trim() || item.length>100 || /[\x00-\x1f\x7f]/.test(item))) {
+    throw new HttpError(400,'신청 서비스 목록을 확인해 주세요.');
+  }
+  const db = env.DB;
+  const recipient = env.BONYEON_CONSULTATION_EMAIL || env.BONYEON_GMAIL_FROM;
+  const sender = env.BONYEON_GMAIL_FROM;
+  const id = 'gmail:consultation:'+submissionId;
+  const details = ['접수 번호 '+submissionId, '신청인 '+name, '연락처 '+contact,
+    '주소 '+(readField('address',250) || '미입력'),'건물 유형 '+(readField('buildingType',80) || '미입력'),
+    '평수 '+(readField('area',80) || '미입력'),'거래 여부 '+(readField('visitType',80) || '미입력'),
+    '', '신청 서비스', ...(services.length ? services.map(item=>'- '+item.trim()) : ['선택 안 함'])].join('\n');
+  const existing = () => db.prepare('SELECT body FROM report_mail WHERE id=?').bind(id).first();
+  const duplicate = previous => {
+    if (previous.body!==details) throw new HttpError(409,'이미 사용된 접수 번호입니다. 다시 신청해 주세요.');
+    return json({ accepted:true,submissionId });
+  };
+  const previous = await existing();
+  if (previous) return duplicate(previous);
+  if (!validMailbox(recipient) || !validMailbox(sender)
+    || !await db.prepare('SELECT 1 FROM gmail_report_runner WHERE id=1').first()) {
+    throw new HttpError(503,'온라인 상담 접수에 연결하지 못했습니다. 입력 내용을 보관하고 잠시 후 다시 시도해 주세요.');
+  }
+  const source = await appRequestSource(request,env);
+  if (!await consumeAppLimit(db,'consultation',source,5,3600_000)) {
+    throw new HttpError(429,'상담 접수 시도가 많습니다. 잠시 후 다시 시도해 주세요.');
+  }
+  const now = new Date();
+  const result = await db.prepare(`
+    INSERT INTO report_mail(id,kind,reference,recipient,sender,subject,body,html,created_at,requested_by)
+    SELECT ?,'consultation',?,?,?,?,?,'',?,'public-consultation'
+    WHERE (SELECT COUNT(*) FROM report_mail WHERE kind='consultation' AND created_at>?)<30
+    ON CONFLICT(id) DO NOTHING
+  `).bind(id,submissionId,recipient,sender,'[본연] 간편상담 접수 · '+name,details,now.toISOString(),
+    new Date(+now-86400_000).toISOString()).run();
+  if (result.meta.changes) return json({ accepted:true,submissionId },201);
+  const repeated = await existing();
+  if (repeated) return duplicate(repeated);
+  throw new HttpError(429,'오늘 온라인 상담 접수 한도에 도달했습니다. 잠시 후 다시 시도해 주세요.');
+}
+
 export async function handleApi(request, env, handleControl, handleWorkflows) {
   try {
     const path = new URL(request.url).pathname;
     const method = request.method;
     const db = env.DB;
     if (!db || !env.BONYEON_OWNER_EMAIL) throw new HttpError(503, '본연 운영 서버 설정을 확인해 주세요.');
+    if (path==='/api/consultation' && method==='POST') return await submitPublicConsultation(request,env);
     const account = await identity(request, env);
     if (path === '/api/session' && method === 'GET') return json(account);
     if (path.startsWith('/api/auth/')) return await handleAppLogin(path,request,env,account,{ requireRole,readJson,json,HttpError });

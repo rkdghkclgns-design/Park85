@@ -33,15 +33,18 @@ async function api(path, { method = 'GET', body, signal } = {}) {
 export async function operationsSession() {
   try {
     return await api('session', { signal: AbortSignal.timeout(5000) });
-  } catch {
-    return independentPortal ? { nativeLogin:true,signedIn:false } : {};
+  } catch (error) {
+    return independentPortal ? { nativeLogin:true,signedIn:false,connectionUnavailable:![401,403].includes(error.status) } : {};
   }
 }
 
 export async function operationsAuth(action,body={}) {
   const payload = await api('auth/'+action,{ method:'POST',body });
   if (payload.sessionToken) storePortalSession(payload.sessionToken);
-  if (action==='logout') storePortalSession(null);
+  if (action==='logout') {
+    storePortalSession(null);
+    sessionStorage.removeItem('bonyeon-recovery-id');
+  }
   return payload;
 }
 

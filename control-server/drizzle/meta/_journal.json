@@ -176,6 +176,13 @@
       "when": 1794364800024,
       "tag": "0024_admin_login_and_signup_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1794364800025,
+      "tag": "0025_signup_invites_and_limits",
+      "breakpoints": true
     }
   ]
 }

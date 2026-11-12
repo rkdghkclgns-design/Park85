@@ -56,14 +56,14 @@ async function readWorkflows(db, month, account, admin, ownerEmail) {
            COALESCE('충전기 ' || e.device_number,e.asset_code) AS assetLabel,
            e.author_name AS authorName, e.exterior, e.interior, e.safety_checked AS safetyChecked,
            e.charger_type AS chargerType, e.canopy, e.result_detail,e.safety_checklist AS safetyChecklist,
-           e.zone_id AS zoneId,z.name AS zoneName,(? OR (${workerCanMoveEvidenceZone})) AS canMoveZone,
+           e.zone_id AS zoneId,z.name AS zoneName,(${openEvidencePeriod} AND (? OR (${workerCanMoveEvidenceZone}))) AS canMoveZone,
            (SELECT json_group_array(json_object('id', p.id, 'slot', p.slot)) FROM (
              SELECT id, slot FROM work_camera_photos WHERE evidence_id = e.id ORDER BY created_at, id
            ) p) AS capturedPhotos,
            e.issue, e.followup_owner AS followupOwner, e.followup_status AS followupStatus, e.followup_note AS followupNote,
            EXISTS (SELECT 1 FROM field_reports r WHERE r.site_id = e.site_id AND e.work_date BETWEEN COALESCE(r.progress_from,r.work_date) AND r.work_date
                      AND r.status = 'approved') AS approved,
-           EXISTS (SELECT 1 FROM settlement_months c WHERE c.month = substr(e.work_date, 1, 7)) AS closed
+           NOT (${openEvidencePeriod}) AS closed
     FROM charger_evidence e JOIN work_sites w ON w.id = e.site_id LEFT JOIN work_zones z ON z.id = e.zone_id
     WHERE e.work_date LIKE ? ${admin ? '' : 'AND e.author_id = ?'}
     ORDER BY e.work_date DESC, w.name, e.asset_code LIMIT 201
@@ -261,13 +261,13 @@ async function moveWorkEvidenceZones(db,{ zoneId,moves },account,admin,{ HttpErr
   if (new Set(moves.map(move=>move.id)).size!==moves.length) throw new HttpError(400,'같은 작업 기록을 두 번 선택할 수 없습니다.');
   const selected = JSON.stringify(moves.map(({ id,fromZoneId })=>({ id,fromZoneId })));
   const { results: current } = await db.prepare(`
-    SELECT e.id,e.site_id AS siteId,e.zone_id AS zoneId,(? OR (${workerCanMoveEvidenceZone})) AS canMove
+    SELECT e.id,e.site_id AS siteId,e.zone_id AS zoneId,(${openEvidencePeriod} AND (? OR (${workerCanMoveEvidenceZone}))) AS canMove
     FROM charger_evidence e JOIN json_each(?) item ON e.id=json_extract(item.value,'$.id')
     WHERE (? OR e.author_id=?)
   `).bind(Number(admin),account.id,account.email,selected,Number(admin),account.id).all();
   if (current.length!==moves.length) throw new HttpError(404,'선택한 작업 기록을 모두 찾을 수 없습니다.');
   if (current.some(row=>!row.canMove)) {
-    throw new HttpError(403,'승인·마감됐거나 현재 배정이 아닌 기록은 관리자가 구역을 수정할 수 있습니다.');
+    throw new HttpError(403,'마감된 증빙은 이동할 수 없습니다. 승인된 증빙이나 배정이 끝난 증빙은 관리자에게 문의해 주세요.');
   }
   const { siteId } = current[0];
   if (current.some(row=>row.siteId!==siteId)) throw new HttpError(400,'같은 현장의 작업 기록만 함께 옮길 수 있습니다.');
@@ -278,7 +278,7 @@ async function moveWorkEvidenceZones(db,{ zoneId,moves },account,admin,{ HttpErr
     WITH eligible AS (
       SELECT e.id FROM charger_evidence e JOIN json_each(?) item ON e.id=json_extract(item.value,'$.id')
       WHERE (e.zone_id IS json_extract(item.value,'$.fromZoneId') OR e.zone_id=?)
-        AND (? OR (${workerCanMoveEvidenceZone}))
+        AND ${openEvidencePeriod} AND (? OR (${workerCanMoveEvidenceZone}))
         AND EXISTS (SELECT 1 FROM work_zones z WHERE z.id=? AND z.site_id=e.site_id AND z.deleted_at IS NULL)
     )
     UPDATE charger_evidence AS e SET zone_id=?,history_actor=CASE WHEN e.zone_id IS NOT ? THEN ? ELSE e.history_actor END
@@ -325,7 +325,7 @@ async function updateWorkIssue(db, body, account, { HttpError }) {
   if (!result.meta.changes) throw new HttpError(404, '후속 조치가 필요한 이상 사항을 찾을 수 없습니다.');
 }
 
-async function readSettlementLedger(db, month) {
+async function readSettlementLedger(db, month, ownerEmail) {
   const close = await db.prepare('SELECT closed_at AS closedAt, closed_by AS closedBy FROM settlement_months WHERE month = ?')
     .bind(month).first();
   const { results: rows } = await db.prepare(`
@@ -339,6 +339,7 @@ async function readSettlementLedger(db, month) {
     WHERE r.work_date LIKE ? ORDER BY r.work_date, r.site_name, r.id
   `).bind(month + '-%').all();
   const { results: workers } = await db.prepare("SELECT email,name,role='admin' AS internal FROM members WHERE role IN ('cleaner','admin') ORDER BY name,email").all();
+  if (ownerEmail && !workers.some(worker => worker.email===ownerEmail)) workers.unshift({ email:ownerEmail,name:'본연 관리자',internal:1 });
   return { close, workers, rows: rows.map(row => {
     const workerBreakdown = JSON.parse(row.workerBreakdown);
     return { ...row,workerBreakdown,internalUnits:internalWorkUnits(row,workerBreakdown) };
@@ -353,16 +354,13 @@ async function closeSettlement(db, month, account, { HttpError, koreaDate, valid
     INSERT INTO settlement_months (month, closed_at, closed_by)
     SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM field_reports WHERE work_date LIKE ?)
       AND NOT EXISTS (SELECT 1 FROM field_reports WHERE work_date LIKE ?
-                      AND (status <> 'approved' OR contract_price IS NULL OR (worker_price IS NULL AND
-                        COALESCE((SELECT SUM(CASE WHEN COALESCE(json_extract(w.value,'$.internal'),0)=0 THEN json_extract(w.value,'$.units') ELSE 0 END)
-                          FROM settlement_payments p,json_each(p.worker_breakdown) w WHERE p.report_id=field_reports.id),
-                        units-internal_units)>0)))
+                      AND (status <> 'approved' OR contract_price IS NULL OR (worker_price IS NULL AND units>internal_units)))
     ON CONFLICT(month) DO NOTHING
   `).bind(month, nowIso(), account.name || account.email, month + '-%', month + '-%').run();
   if (!result.meta.changes) throw new HttpError(409, '마감할 승인 건이 없거나, 미승인·단가 미확정 보고가 있거나, 이미 마감되었습니다.');
 }
 
-async function saveSettlementPayments(db, body, account, { HttpError, validDate, koreaDate, emailAddress }) {
+async function saveSettlementPayments(db, body, account, ownerEmail, { HttpError, validDate, koreaDate, emailAddress }) {
   const { id, billed, received, paid, vat, workers, paymentVersion } = body ?? {};
   const billingRef = cleanText(body?.billingRef);
   const note = cleanText(body?.note);
@@ -373,19 +371,22 @@ async function saveSettlementPayments(db, body, account, { HttpError, validDate,
     || received > billed || billingRef.length > 100 || note.length > 400 || reason.length > 400) {
     throw new HttpError(400, '원 단위 금액을 확인해 주세요. 입금액과 부가세는 청구 합계를 넘을 수 없습니다.');
   }
-  if (paymentVersion !== undefined && !nonnegative(paymentVersion)) {
+  if (!nonnegative(paymentVersion)) {
     throw new HttpError(400, '정산 내역의 버전을 확인해 주세요.');
   }
-  const expectedVersion = paymentVersion ?? null;
+  const expectedVersion = paymentVersion;
   let breakdown = null;
   let allocatedUnits = null;
+  let allocatedInternal = null;
   if (workers !== undefined) {
     if (!Array.isArray(workers) || workers.length > 100) throw new HttpError(400, '실제 작업자 내역을 확인해 주세요.');
     const current = await db.prepare('SELECT worker_breakdown FROM settlement_payments WHERE report_id = ?').bind(id).first();
     const names = new Map(JSON.parse(current?.worker_breakdown ?? '[]').map(row => [row.email, { name:row.name,internal:Boolean(row.internal) }]));
     const { results } = await db.prepare("SELECT email,name,role='admin' AS internal FROM members WHERE role IN ('cleaner','admin')").all();
     for (const member of results) if (!names.has(member.email)) names.set(member.email,member);
+    if (ownerEmail) names.set(ownerEmail,{ name:'본연 관리자',internal:true });
     const seen = new Set();
+    let totalInternal = 0n;
     let totalUnits = 0n;
     let totalPaid = 0n;
     const entries = workers.map(row => {
@@ -399,6 +400,7 @@ async function saveSettlementPayments(db, body, account, { HttpError, validDate,
       if (worker.internal && (amount > 0 || paidDate)) throw new HttpError(400,'관리자 직접 작업에는 지급액과 지급일을 입력할 수 없습니다.');
       seen.add(email);
       totalUnits += BigInt(units);
+      if (worker.internal) totalInternal += BigInt(units);
       totalPaid += BigInt(amount);
       return { email,name:worker.name,units,paid:amount,paidDate,...(worker.internal ? { internal:true } : {}) };
     });
@@ -407,14 +409,15 @@ async function saveSettlementPayments(db, body, account, { HttpError, validDate,
     }
     breakdown = JSON.stringify(entries);
     allocatedUnits = entries.length ? Number(totalUnits) : null;
+    allocatedInternal = entries.length ? Number(totalInternal) : null;
   }
   const result = await db.prepare(`
     INSERT INTO settlement_payments (report_id, billed, received, paid, billing_ref, note, updated_at, vat, worker_breakdown, history_actor, history_reason)
     SELECT id, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, '[]'), ?, ? FROM field_reports WHERE id = ? AND status = 'approved'
-      AND (internal_units<units OR ?=0 OR COALESCE(json_array_length(COALESCE(?,
-        (SELECT worker_breakdown FROM settlement_payments WHERE report_id=field_reports.id))),0)>0)
+      AND (internal_units<units OR ?=0)
       AND (? IS NULL OR units = ?)
-      AND (? IS NULL OR ? = COALESCE((SELECT payment_version FROM settlement_payments WHERE report_id = field_reports.id), 0))
+      AND (? IS NULL OR internal_units = ?)
+      AND ? = COALESCE((SELECT payment_version FROM settlement_payments WHERE report_id = field_reports.id), 0)
       AND (? <> '' OR NOT EXISTS (SELECT 1 FROM settlement_months WHERE month = substr(field_reports.work_date,1,7)))
     ON CONFLICT(report_id) DO UPDATE SET billed = excluded.billed, received = excluded.received,
       paid = excluded.paid, billing_ref = excluded.billing_ref, note = excluded.note, updated_at = excluded.updated_at,
@@ -424,19 +427,28 @@ async function saveSettlementPayments(db, body, account, { HttpError, validDate,
       payment_version = settlement_payments.payment_version + 1
     WHERE (? IS NOT NULL OR json_array_length(settlement_payments.worker_breakdown) = 0 OR settlement_payments.paid = excluded.paid)
       AND (? OR settlement_payments.vat IS NULL OR settlement_payments.vat <= excluded.billed)
-  `).bind(billed, received, paid, billingRef, note, nowIso(), vat ?? null, breakdown, account.name || account.email, reason, id,paid,breakdown,allocatedUnits,
-    allocatedUnits, expectedVersion, expectedVersion, reason, Number(vat !== undefined), breakdown, breakdown, Number(vat !== undefined)).run();
+      AND (NOT EXISTS (SELECT 1 FROM field_reports r JOIN settlement_months c ON c.month=substr(r.work_date,1,7)
+             WHERE r.id=settlement_payments.report_id)
+        OR (settlement_payments.billed=excluded.billed AND settlement_payments.billing_ref=excluded.billing_ref
+          AND (?=0 OR settlement_payments.vat IS NULL OR settlement_payments.vat IS excluded.vat)))
+  `).bind(billed, received, paid, billingRef, note, nowIso(), vat ?? null, breakdown, account.name || account.email, reason, id,paid,allocatedUnits,
+    allocatedUnits, allocatedInternal, allocatedInternal, expectedVersion, reason, Number(vat !== undefined), breakdown, breakdown,
+    Number(vat !== undefined), Number(vat !== undefined)).run();
   if (result.meta.changes) return;
-  if (expectedVersion !== null) {
-    const saved = await db.prepare('SELECT payment_version AS version FROM settlement_payments WHERE report_id = ?').bind(id).first();
-    if ((saved?.version ?? 0) !== expectedVersion) {
-      throw new HttpError(409, '다른 곳에서 이 정산 내역을 변경했습니다. 정산 새로고침 후 최신 금액을 확인해 주세요.');
-    }
+  const saved = await db.prepare('SELECT payment_version AS version FROM settlement_payments WHERE report_id = ?').bind(id).first();
+  if ((saved?.version ?? 0) !== expectedVersion) {
+    throw new HttpError(409, '다른 곳에서 이 정산 내역을 변경했습니다. 정산 새로고침 후 최신 금액을 확인해 주세요.');
   }
   if (!reason && await db.prepare(`SELECT 1 FROM field_reports r JOIN settlement_months c ON c.month=substr(r.work_date,1,7)
     WHERE r.id=?`).bind(id).first()) throw new HttpError(409, '마감 후 입금·지급을 변경하려면 사유를 입력해 주세요.');
-  throw new HttpError(409, '승인 상태와 전체 작업 수량, 기존 부가세·작업자별 지급액을 확인해 주세요.');
+  throw new HttpError(409, '승인 상태, 관리자 직접 작업 수량, 마감된 청구 내역과 작업자별 지급액을 확인해 주세요.');
 }
+
+const openEvidencePeriod = `NOT EXISTS (
+  SELECT 1 FROM settlement_months c WHERE c.month=substr(e.work_date,1,7)
+    OR EXISTS (SELECT 1 FROM field_reports r WHERE r.site_id=e.site_id AND c.month=substr(r.work_date,1,7)
+      AND e.work_date BETWEEN COALESCE(r.progress_from,r.work_date) AND r.work_date)
+)`;
 
 export async function handleWorkflows(path, request, env, account, context) {
   const { requireRole, readJson, json, HttpError, validDate, koreaDate } = context;
@@ -515,9 +527,9 @@ export async function handleWorkflows(path, request, env, account, context) {
     const body = (await readJson(request, env)) ?? {};
     const values = normalizeWorkResults(body);
     if (!isUuid(body.id) || !values) throw new HttpError(400, '네 항목의 작업 결과를 확인해 주세요. 이상 발견 시 메모가 필요합니다.');
-    const saved = await db.prepare('UPDATE charger_evidence SET result_detail = ?, history_actor = ? WHERE id = ?')
+    const saved = await db.prepare(`UPDATE charger_evidence AS e SET result_detail = ?, history_actor = ? WHERE id = ? AND ${openEvidencePeriod}`)
       .bind(JSON.stringify(values), account.name || account.email, body.id).run();
-    if (!saved.meta.changes) throw new HttpError(404, '작업 증빙을 찾을 수 없습니다.');
+    if (!saved.meta.changes) throw new HttpError(409, '수정 가능한 미마감 작업 증빙을 확인해 주세요.');
     return json({ ok: true });
   }
   if (path === '/api/work/evidence/classification' && method === 'PATCH') {
@@ -525,9 +537,9 @@ export async function handleWorkflows(path, request, env, account, context) {
     if (!isUuid(id) || !chargerTypes.includes(chargerType) || !canopyScopes.includes(canopy)) {
       throw new HttpError(400, '기기 유형과 캐노피 포함 여부를 확인해 주세요.');
     }
-    const result = await db.prepare('UPDATE charger_evidence SET charger_type = ?, canopy = ?, history_actor = ? WHERE id = ?')
+    const result = await db.prepare(`UPDATE charger_evidence AS e SET charger_type = ?, canopy = ?, history_actor = ? WHERE id = ? AND ${openEvidencePeriod}`)
       .bind(chargerType, canopy, account.name || account.email, id).run();
-    if (!result.meta.changes) throw new HttpError(404, '작업 증빙을 찾을 수 없습니다.');
+    if (!result.meta.changes) throw new HttpError(409, '수정 가능한 미마감 작업 증빙을 확인해 주세요.');
     return json({ ok: true });
   }
   if (path === '/api/work/plan' && method === 'PUT') {
@@ -547,13 +559,13 @@ export async function handleWorkflows(path, request, env, account, context) {
   if (path === '/api/work/settlement' && method === 'GET') {
     const month = url.searchParams.get('month');
     if (!hasMonth(month, validDate)) throw new HttpError(400, '조회할 결산 월을 확인해 주세요.');
-    return json(await readSettlementLedger(db, month));
+    return json(await readSettlementLedger(db, month, context.emailAddress(env.BONYEON_OWNER_EMAIL)));
   }
   if (path === '/api/work/settlement/export' && method === 'GET') {
     const month = url.searchParams.get('month');
     if (!hasMonth(month, validDate)) throw new HttpError(400, '내려받을 결산 월을 확인해 주세요.');
     const close = await db.prepare('SELECT closed_at AS closedAt, closed_by AS closedBy FROM settlement_months WHERE month=?').bind(month).first();
-    if (!close) return json(await readSettlementLedger(db, month));
+    if (!close) return json(await readSettlementLedger(db, month, context.emailAddress(env.BONYEON_OWNER_EMAIL)));
     const { results } = await db.prepare('SELECT data,legacy FROM settlement_snapshots WHERE month=? ORDER BY report_id').bind(month).all();
     if (!results.length) throw new HttpError(409, '마감 시점에 저장된 정산 자료가 없습니다.');
     return json({ close, legacy: results.some(row => row.legacy), rows: results.map(({data}) => {
@@ -566,7 +578,7 @@ export async function handleWorkflows(path, request, env, account, context) {
     return json({ ok: true });
   }
   if (path === '/api/work/settlement/payments' && method === 'PATCH') {
-    await saveSettlementPayments(db, await readJson(request, env), account, context);
+    await saveSettlementPayments(db, await readJson(request, env), account, context.emailAddress(env.BONYEON_OWNER_EMAIL), context);
     return json({ ok: true });
   }
   throw new HttpError(404, '요청한 현장 관제 기능을 찾을 수 없습니다.');

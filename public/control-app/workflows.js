@@ -160,7 +160,7 @@ function evidenceRows(evidence, admin) {
         <p class="small">유형 ${chargerLabels[row.chargerType]} · 캐노피 ${canopyLabels[row.canopy]}</p>
         ${completedSafetyList(row.safetyChecklist)}
         ${workResultList(row.workResults)}
-        ${admin ? `<form class="row" data-work="classification" data-id="${esc(row.id)}">
+        ${admin && !row.closed ? `<form class="row" data-work="classification" data-id="${esc(row.id)}">
           ${classificationFields(row.chargerType, row.canopy)}
           <button type="submit" class="btn compact">기기 분류 저장</button>
         </form>` : ''}
@@ -235,15 +235,17 @@ function ledgerRows(model, month, today) {
       ? '<div><button type="button" class="btn primary" data-close-ledger>이 달 결산 마감</button></div>' : ''}
     ${approved.length ? approved.map(row => {
       const subtotal = (price,count=row.units) => !count ? '0원' : price == null ? '단가 미확정' : money(BigInt(count) * BigInt(price));
+      const billingLocked = model.close && row.paymentVersion ? 'readonly' : '';
       return `<details class="report-control-row" data-ledger-report="${esc(row.id)}"><summary><strong>${esc(row.siteName)} · ${esc(row.workDate)}</strong><span class="small muted"> · ${esc(row.authorName)} · ${row.units}기</span></summary>
         <div class="stack work-details">
           <p class="small">계약 ${subtotal(row.contractPrice)} · 작업자 정산 ${subtotal(row.workerPrice,row.units-row.internalUnits)} · 미수 ${money(BigInt(row.billed) - BigInt(row.received))}
             ${row.internalUnits ? ' · 관리자 직접 작업 ' + row.internalUnits + '기 지급 제외' : ''}</p>
           <form class="stack" data-work="payments" data-id="${esc(row.id)}" data-payment-version="${row.paymentVersion}" data-internal-only="${Number(row.internalWork)}">
-            <div class="row">${label('청구 합계(원)', 'billed', 'number', `min="0" step="1" required value="${row.billed}"`)}
-              ${label('부가세(원)', 'vat', 'number', `min="0" step="1" value="${row.vat ?? ''}"`)}
+            <div class="row">${label('청구 합계(원)', 'billed', 'number', `min="0" step="1" required value="${row.billed}" ${billingLocked}`)}
+              ${label('부가세(원)', 'vat', 'number', `min="0" step="1" value="${row.vat ?? ''}" ${row.vat == null ? '' : billingLocked}`)}
               ${label('입금액(원)', 'received', 'number', `min="0" step="1" required value="${row.received}"`)}
               ${label('작업자 지급 합계(원)', 'paid', 'number', `min="0" step="1" required value="${row.paid}" ${row.workerBreakdown.length || row.internalWork ? 'readonly' : ''}`)}</div>
+            ${billingLocked ? '<p class="small muted">마감된 청구 합계·청구 번호와 입력된 부가세는 고정됩니다. 변경할 때는 사유를 입력해 주세요.</p>' : ''}
             <p class="small muted" data-payment-supply>공급가액 · ${row.vat == null ? '부가세 미입력' : money(row.billed - row.vat)}</p>
             <fieldset class="stack work-fieldset">
               <legend>실제 작업자별 수량·지급</legend>
@@ -251,7 +253,7 @@ function ledgerRows(model, month, today) {
               <div class="stack" data-payment-workers>${row.workerBreakdown.map(worker => workerPaymentRow(model.workers, today, worker)).join('')}</div>
               <div><button type="button" class="btn compact" data-add-payment-worker>실제 작업자 추가</button></div>
             </fieldset>
-            <div class="row">${label('청구 번호', 'billingRef', 'text', `maxlength="100" value="${esc(row.billingRef)}"`)}
+            <div class="row">${label('청구 번호', 'billingRef', 'text', `maxlength="100" value="${esc(row.billingRef)}" ${billingLocked}`)}
               ${label('정산 메모', 'note', 'text', `maxlength="400" value="${esc(row.note)}"`)}
               ${model.close ? label('마감 후 변경 사유', 'changeReason', 'text', 'maxlength="400" required') : ''}
               <button type="submit" class="btn compact">정산 내역 저장</button></div>

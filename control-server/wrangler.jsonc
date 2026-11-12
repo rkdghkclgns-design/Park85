@@ -8,6 +8,7 @@
     "BONYEON_FRONTEND_ORIGIN": "https://bonyeonclean.com",
     "BONYEON_APP_LOGIN_REQUIRED": "1",
     "BONYEON_GMAIL_FROM": "bonyeon85@gmail.com",
+    "BONYEON_CONSULTATION_EMAIL": "bonyeon.cs@gmail.com",
     "BONYEON_PORTAL_LINKS": "1",
     "BONYEON_REPORT_START_DATE": "2026-11-11"
   },

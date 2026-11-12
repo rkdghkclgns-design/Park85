@@ -1,5 +1,5 @@
 import { validMailbox } from './addresses.mjs';
-import { createAppLoginKey, usesAppLogin } from './app-login.mjs';
+import { appRequestSource, consumeAppLimit, usesAppLogin } from './app-login.mjs';
 
 const signupDocumentLimit = 5_000_000;
 const signupUploadLimit = 10_100_000;
@@ -54,13 +54,13 @@ async function submitSignup(request, env, account, context) {
   if (!await db.prepare('SELECT 1 FROM app_signup_settings WHERE id=1 AND enabled=1').first()) {
     throw new HttpError(403,'현재 회원가입 접수가 중지되어 있습니다.');
   }
+  const { email, id: userId } = account;
+  if (usesAppLogin(env) && !await db.prepare('SELECT 1 FROM app_login_keys WHERE email=? AND user_id=? AND invite_verified=1')
+    .bind(email,userId).first()) throw new HttpError(403,'관리자가 발급한 초대 키로 로그인해 주세요.');
   const form = await signupForm(request, env, context);
-  const email = account?.email ?? signupString(form.get('email')).toLowerCase();
-  const userId = account?.id ?? 'bonyeon:'+crypto.randomUUID();
   if (!validMailbox(email)) throw new HttpError(400,'로그인에 사용할 이메일을 확인해 주세요.');
-  if (email===signupString(env.BONYEON_OWNER_EMAIL).toLowerCase() || account?.role
-    || await db.prepare('SELECT 1 FROM members WHERE email = ? OR user_id = ?').bind(email,userId).first()
-    || (!account && await db.prepare('SELECT 1 FROM app_login_keys WHERE email=?').bind(email).first())) {
+  if (email===signupString(env.BONYEON_OWNER_EMAIL).toLowerCase() || account.role
+    || await db.prepare('SELECT 1 FROM members WHERE email = ? OR user_id = ?').bind(email,userId).first()) {
     throw new HttpError(409, '이미 등록된 계정입니다. 이용 권한은 관리자에게 확인해 주세요.');
   }
   if (await db.prepare("SELECT 1 FROM signup_applications WHERE status = 'pending' AND (email = ? OR user_id = ?)").bind(email,userId).first()) {
@@ -75,7 +75,6 @@ async function submitSignup(request, env, account, context) {
     throw new HttpError(400, '가입 유형, 이름, 사업자명과 계산서 수신 이메일을 확인해 주세요.');
   }
   const id = crypto.randomUUID();
-  const login = account ? null : await createAppLoginKey();
   const files = [];
   if (kind === 'business') {
     if (!env.BUCKET) throw new HttpError(503, '가입 서류 보관함을 확인해 주세요.');
@@ -84,17 +83,21 @@ async function submitSignup(request, env, account, context) {
   try {
     const writes = await Promise.allSettled(files.map(([key, file]) =>
       env.BUCKET.put(signupObject(id, key), file.bytes, { httpMetadata: { contentType: file.type } })));
-    if (writes.some(write => write.status === 'rejected')) throw new HttpError(502, '가입 서류를 저장하지 못했습니다.');
+    const failed = writes.find(write => write.status === 'rejected');
+    if (failed) {
+      if (String(failed.reason).includes('signup_media_limit')) throw new HttpError(507,'가입 서류 보관함이 가득 찼습니다. 본연 관리자에게 문의해 주세요.');
+      throw new HttpError(502, '가입 서류를 저장하지 못했습니다.');
+    }
     const mimes = Object.fromEntries(files.map(([key, file]) => [key, file.type]));
     const saved = await db.prepare(`
-      INSERT INTO signup_applications(id,user_id,email,name,kind,business_name,invoice_email,business_mime,bank_mime,created_at,initial_login_key_hash)
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      INSERT INTO signup_applications(id,user_id,email,name,kind,business_name,invoice_email,business_mime,bank_mime,created_at)
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       WHERE NOT EXISTS (SELECT 1 FROM members WHERE email = ? OR user_id = ?)
         AND EXISTS (SELECT 1 FROM app_signup_settings WHERE id=1 AND enabled=1)
-        AND (? IS NULL OR NOT EXISTS (SELECT 1 FROM app_login_keys WHERE email=?))
+        AND (?=0 OR EXISTS (SELECT 1 FROM app_login_keys WHERE email=? AND user_id=? AND invite_verified=1))
       ON CONFLICT DO NOTHING
     `).bind(id,userId,email,name,kind,businessName,invoiceEmail,mimes.businessCertificate || null,
-      mimes.bankCopy || null,new Date().toISOString(),login?.keyHash ?? null,email,userId,login?.keyHash ?? null,email).run();
+      mimes.bankCopy || null,new Date().toISOString(),email,userId,Number(usesAppLogin(env)),email,userId).run();
     if (!saved.meta.changes) {
       if (!await db.prepare('SELECT 1 FROM app_signup_settings WHERE id=1 AND enabled=1').first()) {
         throw new HttpError(403,'현재 회원가입 접수가 중지되어 있습니다.');
@@ -102,10 +105,11 @@ async function submitSignup(request, env, account, context) {
       throw new HttpError(409, '이미 등록된 계정이거나 접수된 신청이 있습니다.');
     }
   } catch (error) {
-    await Promise.allSettled(files.map(([key]) => env.BUCKET.delete(signupObject(id, key))));
+    const persisted = await db.prepare('SELECT id FROM signup_applications WHERE id=?').bind(id).first().catch(() => undefined);
+    if (persisted) return;
+    if (persisted === null) await Promise.allSettled(files.map(([key]) => env.BUCKET.delete(signupObject(id, key))));
     throw error;
   }
-  return login?.key;
 }
 
 export async function handleSignup(path, request, env, account, context) {
@@ -125,8 +129,30 @@ export async function handleSignup(path, request, env, account, context) {
     }
   }
   if (path==='/api/signup/register' && request.method==='POST' && usesAppLogin(env)) {
-    const key=await submitSignup(request,env,null,context);
-    return json({ key },201);
+    const body = (await readJson(request,env,2048)) ?? {};
+    const name = signupString(body.name);
+    const email = signupString(body.email).toLowerCase();
+    if (!validMailbox(email) || !name || name.length > 80) throw new HttpError(400,'이름과 이메일을 확인해 주세요.');
+    const source = await appRequestSource(request,env);
+    if (!await consumeAppLimit(db,'signup-invite',source,5,3600_000)) {
+      throw new HttpError(429,'초대 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.');
+    }
+    if (email===signupString(env.BONYEON_OWNER_EMAIL).toLowerCase()) return json({ ok:true },201);
+    await db.prepare('DELETE FROM signup_invite_requests WHERE requested_at<=?').bind(new Date(Date.now()-30*86400_000).toISOString()).run();
+    const saved = await db.prepare(`
+      INSERT INTO signup_invite_requests(email,name,requested_at)
+      SELECT ?,?,? WHERE EXISTS (SELECT 1 FROM app_signup_settings WHERE id=1 AND enabled=1)
+        AND (SELECT COUNT(*) FROM signup_invite_requests WHERE requested_at>?)<200
+        AND NOT EXISTS (SELECT 1 FROM members WHERE email=?)
+      ON CONFLICT(email) DO NOTHING
+    `).bind(email,name,new Date().toISOString(),new Date(Date.now()-30*86400_000).toISOString(),email).run();
+    if (!saved.meta.changes && !await db.prepare('SELECT 1 FROM app_signup_settings WHERE id=1 AND enabled=1').first()) {
+      throw new HttpError(403,'현재 회원가입 접수가 중지되어 있습니다.');
+    }
+    if (!saved.meta.changes && !await db.prepare('SELECT 1 FROM signup_invite_requests WHERE email=? UNION ALL SELECT 1 FROM members WHERE email=?').bind(email,email).first()) {
+      throw new HttpError(429,'초대 요청 접수가 가득 찼습니다. 본연 관리자에게 문의해 주세요.');
+    }
+    return json({ ok:true },201);
   }
   if (!account.signedIn) throw new HttpError(401, '가입용 키로 본연 사이트에 로그인해 주세요.');
   if (path === '/api/signup' && request.method === 'GET') {
@@ -144,10 +170,14 @@ export async function handleSignup(path, request, env, account, context) {
   if (path === '/api/signup/admin' && request.method === 'GET') {
     const { results } = await db.prepare(`
       SELECT id, email, name, kind, business_name AS businessName, invoice_email AS invoiceEmail,
-        business_mime IS NOT NULL AS hasBusinessCertificate, bank_mime IS NOT NULL AS hasBankCopy, status, reason, created_at AS submittedAt
+        business_mime IS NOT NULL AS hasBusinessCertificate, bank_mime IS NOT NULL AS hasBankCopy, status, reason, created_at AS submittedAt,
+        (?=0 OR EXISTS (SELECT 1 FROM app_login_keys k WHERE k.email=signup_applications.email
+          AND k.user_id=signup_applications.user_id AND k.invite_verified=1)) AS verified
       FROM signup_applications ORDER BY status <> 'pending', created_at DESC LIMIT 100
-    `).all();
-    return json({ applications: results });
+    `).bind(Number(usesAppLogin(env))).all();
+    const cutoff = new Date(Date.now()-30*86400_000).toISOString();
+    const { results: invites } = await db.prepare('SELECT email,name,requested_at AS requestedAt FROM signup_invite_requests WHERE requested_at>? ORDER BY requested_at DESC LIMIT 200').bind(cutoff).all();
+    return json({ applications: results, invites });
   }
   if (path === '/api/signup/admin' && request.method === 'PATCH') {
     const body = (await readJson(request, env)) ?? {};
@@ -156,11 +186,13 @@ export async function handleSignup(path, request, env, account, context) {
       || (body.status === 'rejected' && !reason)) throw new HttpError(400, '가입 처리 내용과 사유를 확인해 주세요.');
     const result = await db.prepare(`
       UPDATE signup_applications SET status = ?, reason = ?, reviewed_at = ?, reviewed_by = ?
-      WHERE id = ? AND status = 'pending' AND (? = 'rejected' OR NOT EXISTS (
-        SELECT 1 FROM members m WHERE m.email = signup_applications.email OR m.user_id = signup_applications.user_id
+      WHERE id = ? AND status = 'pending' AND (? = 'rejected' OR (
+        NOT EXISTS (SELECT 1 FROM members m WHERE m.email = signup_applications.email OR m.user_id = signup_applications.user_id)
+        AND (?=0 OR EXISTS (SELECT 1 FROM app_login_keys k WHERE k.email=signup_applications.email
+          AND k.user_id=signup_applications.user_id AND k.invite_verified=1))
       ))
-    `).bind(body.status, reason, new Date().toISOString(), account.id, body.id, body.status).run();
-    if (!result.meta.changes) throw new HttpError(409, '이미 처리된 신청이거나 사용자 계정이 등록되어 있습니다.');
+    `).bind(body.status, reason, new Date().toISOString(), account.id, body.id, body.status,Number(usesAppLogin(env))).run();
+    if (!result.meta.changes) throw new HttpError(409, '초대 키 발급 여부와 신청 상태를 확인해 주세요.');
     return json({ ok: true });
   }
   if (path === '/api/signup/document' && request.method === 'GET') {

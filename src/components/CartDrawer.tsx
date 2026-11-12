@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useCartStore } from "../store/cartStore";
 import { Button } from "./ui/button";
@@ -64,6 +64,7 @@ export function CartDrawer() {
     };
 
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const submission = useRef<{ id: string; payload: string } | null>(null);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -77,30 +78,24 @@ export function CartDrawer() {
         setIsSubmitting(true);
 
         try {
-            const result = await submitConsultation({
-                ...formData,
-                services: items.map(i => i.name),
-                submittedAt: new Date().toISOString(),
+            const data = { ...formData, services: items.map(i => i.name) };
+            const payload = JSON.stringify(data);
+            if (submission.current?.payload !== payload) submission.current = { id: crypto.randomUUID(), payload };
+            await submitConsultation(data, submission.current.id);
+            submission.current = null;
+            alert("상담 요청을 접수했습니다. 확인 후 남겨주신 연락처로 안내드리겠습니다.");
+            setIsOpen(false);
+            setFormData({
+                buildingType: "",
+                area: "",
+                address: "",
+                contact: "",
+                name: "",
+                visitType: "",
             });
-
-            if (result.success) {
-                alert(`✅ ${result.message}\n\n담당자: ${formData.name}\n연락처: ${formData.contact}\n\n신청 서비스:\n${items.length > 0 ? items.map(i => i.name).join(", ") : "선택 안 함"}`);
-                setIsOpen(false);
-                // Reset form
-                setFormData({
-                    buildingType: "",
-                    area: "",
-                    address: "",
-                    contact: "",
-                    name: "",
-                    visitType: ""
-                });
-            } else {
-                alert(`❌ ${result.message}`);
-            }
         } catch (error) {
-            console.error("Submission error:", error);
-            alert("상담 신청 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+            alert(error instanceof Error && error.name === "Error"
+                ? error.message : "상담 접수를 확인하지 못했습니다. 입력하신 내용으로 다시 시도해 주세요.");
         } finally {
             setIsSubmitting(false);
         }

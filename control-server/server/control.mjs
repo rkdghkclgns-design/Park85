@@ -439,6 +439,7 @@ async function readControlDetail(db, kind, id, month, account, context) {
     const report = await db.prepare(`SELECT ${columns} FROM field_reports r WHERE r.id = ? AND (? OR r.author_id = ?)`)
       .bind(id, Number(admin), account.id).first();
     if (!report) throw missing();
+    const closed = await db.prepare('SELECT 1 FROM settlement_months WHERE month=?').bind(report.workDate.slice(0,7)).first();
     const { results } = await db.prepare(`
       SELECT e.id,COALESCE('충전기 ' || e.device_number,e.asset_code) AS asset_code,e.charger_type,e.canopy,e.exterior,e.interior,e.safety_checked,e.issue,e.result_detail,e.safety_checklist,
         e.site_id AS siteId,e.work_date AS workDate,e.zone_id AS zoneId,z.name AS zoneName,(? OR (${workerCanMoveEvidenceZone})) AS canMoveZone
@@ -453,8 +454,8 @@ async function readControlDetail(db, kind, id, month, account, context) {
     `).bind(JSON.stringify(visible.map(device => device.id))).all();
     const byEvidence = Map.groupBy(captures, photo => photo.evidence_id);
     const devices = visible.map(({ safety_checklist,...device }) => ({ ...device, safetyChecklist:JSON.parse(safety_checklist),
-      workResults: displayWorkResults(device), photos: byEvidence.get(device.id) || [] }));
-    return { title: report.siteName, address: report.address, reports: [report], devices, canEditResults: admin, overflow: results.length > 200,
+      workResults: displayWorkResults(device), canMoveZone: !closed && device.canMoveZone, photos: byEvidence.get(device.id) || [] }));
+    return { title: report.siteName, address: report.address, reports: [report], devices, canEditResults: admin && !closed, overflow: results.length > 200,
       ...(admin ? { billing: await readDetailBilling(db, kind, id, month) } : {}) };
   }
   if (kind === 'worker' && !admin && id !== account.id) throw missing();
@@ -793,6 +794,30 @@ function gmailOfficeBody(kind, key, body, html, env) {
   return { body: notice + '\n\n' + link.text, html: '<p>' + notice + '</p>' + link.html };
 }
 
+const reportMailMarker = 'bonyeon-report:gzip:';
+const reportMailRowLimit = 1_350_000;
+
+async function packReportMail(text, html) {
+  const encoder = new TextEncoder();
+  if (encoder.encode(text).length + encoder.encode(html || '').length <= reportMailRowLimit) return { text, html };
+  const stream = new Blob([JSON.stringify([text, html])]).stream().pipeThrough(new CompressionStream('gzip'));
+  const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+  if (Math.ceil(bytes.length/3)*4 + reportMailMarker.length > reportMailRowLimit) return null;
+  let binary = '';
+  for (let offset=0;offset<bytes.length;offset+=8192) binary += String.fromCharCode(...bytes.subarray(offset,offset+8192));
+  return { text:reportMailMarker+btoa(binary),html:'' };
+}
+
+async function unpackReportMail(body, html) {
+  if (html || !body.startsWith(reportMailMarker)) return { body, html };
+  const bytes = Uint8Array.from(atob(body.slice(reportMailMarker.length)), char => char.charCodeAt(0));
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+  const [text, markup] = await new Response(stream).json();
+  return { body:text, html:markup };
+}
+
+const heldReportText = '보고 분량이 발송 저장 한도를 초과했습니다. 관제에서 해당 보고 기간의 상세 내역을 확인해 주세요.';
+
 async function readOfficeSnapshot(db, key, account, { HttpError }) {
   const missing = () => new HttpError(404, '조회할 수 있는 메일 자료가 없습니다.');
   if (!/^[a-f0-9]{64}$/.test(key || '')) throw missing();
@@ -802,7 +827,8 @@ async function readOfficeSnapshot(db, key, account, { HttpError }) {
   `).bind(key).first();
   if (!row || (!canManageReports(account) && !(row.kind === 'worker' && row.sentAt && row.recipient === account.email
     && row.reference.slice(8) === account.email))) throw missing();
-  return { kind: row.kind, subject: row.subject, html: row.html, text: row.text, sentAt: row.sentAt, createdAt: row.createdAt };
+  const { body, html } = await unpackReportMail(row.text,row.html);
+  return { kind: row.kind, subject: row.subject, html, text: body, sentAt: row.sentAt, createdAt: row.createdAt };
 }
 
 async function officeAcceptanceStatus(db, day) {
@@ -846,6 +872,8 @@ async function queueGmailMail(db, env, account, kind, reference, message, key, {
   if (!(await db.prepare('SELECT 1 FROM gmail_report_runner WHERE id = 1').first())) {
     throw new HttpError(503, '본연 Gmail 자동 발송을 연결해 주세요.');
   }
+  const stored = await packReportMail(message.text,message.html);
+  if (!stored) throw new HttpError(413,heldReportText);
   const snapshot = officeMailKinds.has(kind);
   const existing = snapshot ? '(payload_key = ? OR office_base_key = ?)' : `kind = ? AND reference = ?
     AND (sent_at IS NOT NULL OR provider_id LIKE 'gmail:%' OR requested_by IS NOT NULL)`;
@@ -857,7 +885,7 @@ async function queueGmailMail(db, env, account, kind, reference, message, key, {
     WHERE NOT EXISTS (SELECT 1 FROM report_mail WHERE canceled_at IS NULL AND ${existing})
     ON CONFLICT DO NOTHING
   `).bind('gmail:manual:' + crypto.randomUUID(), kind, reference, message.recipient, env.BONYEON_GMAIL_FROM,
-    message.subject, message.text, message.html, stamp, account.id, key, ...identity).run();
+    message.subject, stored.text, stored.html, stamp, account.id, key, ...identity).run();
   if (result.meta.changes) return { queued: true };
   const previous = await db.prepare(`SELECT sent_at FROM report_mail WHERE canceled_at IS NULL AND ${existing} LIMIT 1`)
     .bind(...identity).first();
@@ -875,6 +903,7 @@ function queuedMailRoute(job, env) {
                   FROM members WHERE role IN ('cleaner','admin') AND active=1 AND email=?`,
       args: [env.BONYEON_GMAIL_FROM, job.reference.slice(8).trim().toLowerCase()] };
   }
+  if (job.kind === 'consultation') return { sql:'SELECT ?',args:[env.BONYEON_CONSULTATION_EMAIL || env.BONYEON_GMAIL_FROM] };
   if (job.kind === 'tax') return { sql: 'SELECT tax_email FROM control_settings WHERE id = 1', args: [] };
   if (job.kind === 'contractor') {
     return { sql: `SELECT s.contractor_email FROM field_reports r JOIN site_reporting s ON s.site_id = r.site_id
@@ -941,8 +970,10 @@ async function claimQueuedGmailReport(db, env, now, requestId) {
       WHERE id = ? AND sent_at IS NULL AND canceled_at IS NULL AND provider_id IS NULL AND ${availableGmailRequest}
       RETURNING provider_id
     `).bind(...target.args, 'gmail:' + claim, ...target.args, requestId, ...target.args, now.toISOString(), job.id, requestId, requestId).first();
-    if (reserved?.provider_id) return { id: job.id, claim, to: job.recipient, subject: job.subject,
-      ...gmailOfficeBody(job.kind, job.payload_key, job.body, job.html, env) };
+    if (reserved?.provider_id) {
+      const { body, html } = await unpackReportMail(job.body,job.html);
+      return { id:job.id,claim,to:job.recipient,subject:job.subject,...gmailOfficeBody(job.kind,job.payload_key,body,html,env) };
+    }
   }
   return null;
 }
@@ -1039,12 +1070,14 @@ async function claimOfficeMail(env, context, now, requestId) {
     const baseKey = await mailPreviewToken(kind, reference, message);
     const key = kind === 'worker' ? await mailPreviewToken(kind, reference, message, signalId) : baseKey;
     const payload = identifyOfficeSnapshot(kind, message, key, env);
+    const packed = await packReportMail(payload.text,payload.html);
+    const heldAt = packed ? null : now.toISOString();
     const id = 'gmail:office:' + crypto.randomUUID();
     const claim = crypto.randomUUID();
     const target = queuedMailRoute({ kind, reference }, env);
     const inserted = await db.prepare(`
-      INSERT INTO report_mail (id, kind, reference, recipient, sender, subject, body, html, created_at, provider_id, payload_key, office_base_key, claim_request_id, office_signal_id)
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      INSERT INTO report_mail (id, kind, reference, recipient, sender, subject, body, html, created_at, provider_id, payload_key, office_base_key, claim_request_id, office_signal_id, hold_at)
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       WHERE EXISTS (SELECT 1 FROM control_settings WHERE id = 1 AND office_auto_enabled = 1)
         AND ? = (${target.sql})
         AND ? = (SELECT MAX(s.id) FROM office_mail_signals s WHERE s.kind = ? AND s.reference = ? AND (${activeOfficeSignals}))
@@ -1052,10 +1085,11 @@ async function claimOfficeMail(env, context, now, requestId) {
         AND (? <> 'worker' OR ? IS NOT (${lastWorkerPayload}))
         AND ${availableGmailRequest}
       ON CONFLICT DO NOTHING
-    `).bind(id, kind, reference, payload.recipient, env.BONYEON_GMAIL_FROM, payload.subject, payload.text, payload.html,
-      now.toISOString(), 'gmail:' + claim, key, baseKey, requestId, signalId, payload.recipient, ...target.args, signalId, kind, reference, kind, reference,
+    `).bind(id, kind, reference, payload.recipient, env.BONYEON_GMAIL_FROM, payload.subject, packed?.text ?? heldReportText, packed?.html ?? '',
+      now.toISOString(), 'gmail:' + claim, key, baseKey, packed ? requestId : null, signalId, heldAt, payload.recipient, ...target.args, signalId, kind, reference, kind, reference,
       kind, baseKey, reference, payload.recipient, requestId, requestId).run();
     if (inserted.meta.changes) {
+      if (!packed) continue;
       return { id, claim, to: payload.recipient, subject: payload.subject,
         ...gmailOfficeBody(kind, key, payload.text, payload.html, env) };
     }
@@ -1103,21 +1137,24 @@ async function claimGmailReport(env, context, now, requestId) {
   for (const { kind, reference } of jobs) {
     const message = await buildControlMail(db, env, kind, reference, context);
     if (!validGmailRecipient(message.recipient)) continue;
+    const packed = await packReportMail(message.text,message.html);
+    const heldAt = packed ? null : now.toISOString();
     const id = 'gmail:' + kind + ':' + reference + ':' + crypto.randomUUID();
     const claim = crypto.randomUUID();
     const target = queuedMailRoute({ kind, reference }, env);
     const result = await db.prepare(`
-      INSERT INTO report_mail (id, kind, reference, recipient, sender, subject, body, html, created_at, provider_id, claim_request_id)
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      INSERT INTO report_mail (id, kind, reference, recipient, sender, subject, body, html, created_at, provider_id, claim_request_id, hold_at)
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       WHERE NOT EXISTS (
         SELECT 1 FROM report_mail WHERE kind = ? AND reference = ? AND canceled_at IS NULL
           AND (sent_at IS NOT NULL OR provider_id LIKE 'gmail:%' OR requested_by IS NOT NULL)
       ) AND ? = (${target.sql}) AND ${availableGmailRequest}
       ON CONFLICT(id) DO NOTHING
     `).bind(id, kind, reference, message.recipient, env.BONYEON_GMAIL_FROM,
-      message.subject, message.text, message.html, now.toISOString(), 'gmail:' + claim, requestId, kind, reference,
+      message.subject, packed?.text ?? heldReportText, packed?.html ?? '', now.toISOString(), 'gmail:' + claim,
+      packed ? requestId : null, heldAt, kind, reference,
       message.recipient, ...target.args, requestId, requestId).run();
-    if (result.meta.changes) return { id, claim, to: message.recipient, subject: message.subject, body: message.text, html: message.html };
+    if (result.meta.changes && packed) return { id, claim, to: message.recipient, subject: message.subject, body: message.text, html: message.html };
   }
   return null;
 }
@@ -1141,8 +1178,9 @@ async function readGmailClaimForRequest(env, requestId) {
     RETURNING canceled_at
   `).bind(...target.args, job.kind, job.reference, new Date().toISOString(), requestId).first();
   if (!checked || checked.canceled_at) return null;
+  const { body, html } = await unpackReportMail(job.body,job.html);
   return { id: job.id, claim: job.provider_id.slice(6), to: job.recipient, subject: job.subject,
-    ...gmailOfficeBody(job.kind, job.payload_key, job.body, job.html, env) };
+    ...gmailOfficeBody(job.kind, job.payload_key, body, html, env) };
 }
 
 async function handleGmailRunner(path, request, env, context) {

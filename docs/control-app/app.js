@@ -6,6 +6,7 @@ import { blankRequest, monthlyReport, newMonthly } from './monthly.js';
 import { mountOperations, operationsAuth, operationsPage, operationsSession, roleNames, workModeKey } from './operations.js';
 import { renderSignup } from './signup.js';
 import { installFormGuidance } from './form-guidance.js';
+import { readPhotoQueue } from './photo-queue.js';
 
 const app = document.querySelector('#app');
 const notice = document.querySelector('#notice');
@@ -16,7 +17,18 @@ const tabs = [['home', '홈', '홈'], ['map', '지도', '현장 작업 지도'],
 const verification = location.pathname.startsWith('/verification/');
 const verificationWorker = location.pathname.startsWith('/verification/worker/');
 const sessionKey = verification ? 'cleanreport-verification-user' : 'cleanreport-user';
+if (independentPortal && !verification && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/control-offline-sw.js',{ scope:'/' }).catch(error => {
+    console.warn('오프라인 화면을 준비하지 못했습니다.',error);
+  });
+}
 const account = await operationsSession();
+const recoveryKey = 'bonyeon-recovery-id';
+if (independentPortal && !verification && !account.connectionUnavailable) {
+  if (account.signedIn && account.id) sessionStorage.setItem(recoveryKey,account.id);
+  else sessionStorage.removeItem(recoveryKey);
+}
+if (account.connectionUnavailable) window.addEventListener('online',()=>location.reload(),{ once:true });
 const defaultWorkspace = verification ? 'verification:' + (account.id || 'visitor')
   : account.role && account.role !== 'owner' ? 'bonyeon:' + account.id : 'demo';
 let user = sessionStorage.getItem(sessionKey);
@@ -63,6 +75,25 @@ function getRoute() {
     if (Number.isFinite(+parsed) && parsed.toISOString().slice(0, 10) === date) return hash;
   }
   return 'home';
+}
+
+function renderConnectionRecovery() {
+  app.innerHTML = `<main class="auth"><section class="auth-card stack">
+    ${brand('본연','현장 작업 관리')}
+    <h1>관제 서버에 연결할 수 없습니다</h1>
+    <p>이 기기에 저장한 사진은 인터넷 연결과 로그인이 확인되면 다시 전송할 수 있습니다.</p>
+    <p class="small" data-recovery-queue role="status"></p>
+    <button class="btn primary" type="button" data-reconnect>연결 다시 확인</button>
+  </section></main>`;
+  app.querySelector('[data-reconnect]').addEventListener('click',()=>location.reload());
+  const id = sessionStorage.getItem(recoveryKey);
+  if (!id) return;
+  const queue = app.querySelector('[data-recovery-queue]');
+  readPhotoQueue(location.pathname+':'+id).then(photos => {
+    queue.textContent = '이 기기에 보관 중인 미전송 사진 '+photos.length+'장';
+  }).catch(() => {
+    queue.textContent = '이 기기의 사진 대기열을 확인하지 못했습니다.';
+  });
 }
 
 function renderNativeLogin() {
@@ -197,6 +228,7 @@ function renderReport(date) {
 function render({ keepScroll = false } = {}) {
   stopOperations();
   stopOperations = () => {};
+  if (account.connectionUnavailable) return renderConnectionRecovery();
   if ((!verification || independentPortal) && account.nativeLogin && !account.signedIn) {
     if (location.hash==='#signup') {
       const controller = new AbortController();

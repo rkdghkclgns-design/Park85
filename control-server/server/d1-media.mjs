@@ -18,6 +18,9 @@ export function d1MediaStore(db) {
       }
       await db.batch(statements);
     },
+    async head(key) {
+      return db.prepare('SELECT 1 FROM media_files WHERE key=?').bind(key).first();
+    },
     async get(key) {
       const [file, parts] = await db.batch([
         db.prepare('SELECT content_type FROM media_files WHERE key=?').bind(key),
