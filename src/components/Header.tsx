@@ -11,7 +11,7 @@ import { controlLoginUrl } from "./ControlPortal";
 function ControlLoginLink() {
     return (
         <a
-            href={controlLoginUrl()}
+            href={controlLoginUrl}
             className="shrink-0 whitespace-nowrap rounded-lg border border-[#1e2b4f] px-2 py-2 text-sm font-medium text-[#1e2b4f] transition-colors hover:bg-[#1e2b4f] hover:text-white sm:px-3"
         >
             로그인
