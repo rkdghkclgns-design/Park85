@@ -2,14 +2,20 @@ import { esc } from './ui.js';
 
 const portalApiOrigin = document.querySelector('meta[name="bonyeon-api-origin"]')?.content || '';
 const portalSessionKey = 'bonyeon-portal-session';
+const portalVerificationKey = 'bonyeon-portal-verification';
 export const independentPortal = Boolean(portalApiOrigin);
 
 export function portalFetch(path, options = {}) {
   if (!independentPortal) return fetch(path, options);
-  const url = new URL(path.replace(/^\.\//, '/'),portalApiOrigin);
+  const verification = location.pathname.startsWith('/verification/worker/') ? '/verification/worker/'
+    : location.pathname.startsWith('/verification/') ? '/verification/' : '/';
+  const base = path.startsWith('./api/auth/') ? '/' : verification;
+  const url = new URL(path,new URL(base,portalApiOrigin));
   const headers = new Headers(options.headers);
   const token = sessionStorage.getItem(portalSessionKey);
   if (token) headers.set('X-Bonyeon-Session',token);
+  const verificationToken = sessionStorage.getItem(portalVerificationKey);
+  if (base==='/verification/worker/' && verificationToken) headers.set('X-Bonyeon-Verification',verificationToken);
   return fetch(url,{ ...options,headers,credentials:'omit',redirect:'error' });
 }
 
@@ -17,6 +23,12 @@ export function storePortalSession(token) {
   if (!independentPortal) return;
   if (token) sessionStorage.setItem(portalSessionKey,token);
   else sessionStorage.removeItem(portalSessionKey);
+}
+
+export function storePortalVerification(token) {
+  if (!independentPortal) return;
+  if (token) sessionStorage.setItem(portalVerificationKey,token);
+  else sessionStorage.removeItem(portalVerificationKey);
 }
 
 export function privateImage(path) {

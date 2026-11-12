@@ -1,4 +1,4 @@
-import { installPrivateMedia } from './portal-api.js';
+import { independentPortal, installPrivateMedia, portalFetch, storePortalVerification } from './portal-api.js';
 import { addAccount, defaultZones, deriveSecret, emptyWorkspace, getAccount, getWorkspace, makeZone, putAccount, randomHex, readPhoto, updateWorkspace } from './store.js';
 import { badge, blankPair, brand, company, duration, empty, esc, icon, listReports, metric, monthName, reportDate, stats, timeText, today } from './ui.js';
 import { blankIssue, newReport, reportDetail, reportError, reportForm, reportRow } from './reports.js';
@@ -80,11 +80,13 @@ function renderNativeLogin() {
 }
 
 async function verificationRequest(action, body) {
-  const response = await fetch('./api/verification/' + action, {
+  const response = await portalFetch('./api/verification/' + action, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   });
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || '검증 로그인 요청을 처리하지 못했습니다.');
+  if (result.verificationToken) storePortalVerification(result.verificationToken);
+  if (action==='logout') storePortalVerification(null);
   return result;
 }
 
@@ -107,13 +109,14 @@ function verificationBanner() {
   if (!verification) return '';
   if (account.canSwitchMode && account.role === 'cleaner') return '<aside class="card ops-upload"><strong>검증 공간 · 청소 진행자 모드</strong></aside>';
   if (verificationWorker) return '<aside class="card ops-upload"><strong>검증 공간 · 테스트 작업자</strong></aside>';
+  const returnUrl = independentPortal ? (window.parent===window ? '/#/service/charger/charger-cleaning' : '/control-app/#control') : '/#control';
   return `<aside class="card ops-upload stack">
-    <div class="row between"><strong>검증 공간 · 관리자</strong><a href="/#control">운영 관제로 돌아가기</a></div>
+    <div class="row between"><strong>검증 공간 · 관리자</strong><a href="${returnUrl}">운영 관제로 돌아가기</a></div>
     <details><summary>테스트 작업자 로그인 준비</summary>
       <form class="row region-refresh" id="verification-code">
         <label class="field"><span>테스트 작업자 이메일</span><input name="email" type="email" maxlength="254" required></label>
         <button class="btn compact" type="submit">일회용 검증 코드 발급</button>
-        <a href="/verification/worker/" target="_blank" rel="noopener">테스트 작업자 로그인 열기</a>
+        <a href="/verification/worker/" ${independentPortal ? '' : 'target="_blank" rel="noopener"'}>테스트 작업자 로그인 열기</a>
         <output class="small" data-verification-code></output>
       </form>
     </details>
@@ -194,7 +197,7 @@ function renderReport(date) {
 function render({ keepScroll = false } = {}) {
   stopOperations();
   stopOperations = () => {};
-  if (!verification && account.nativeLogin && !account.signedIn) {
+  if ((!verification || independentPortal) && account.nativeLogin && !account.signedIn) {
     if (location.hash==='#signup') {
       const controller = new AbortController();
       stopOperations = () => controller.abort();

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="bonyeon-api-origin" content="https://bonyeon-control.cleaning-autopost-slack-relay.workers.dev">
+  <meta name="theme-color" content="#eef2f1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://bonyeon-control.cleaning-autopost-slack-relay.workers.dev; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://tile.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="description" content="본연 전기차 충전기 정밀 청소, 현장 작업 지도와 결과보고">
+  <title>본연 | 현장 작업 관리</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&amp;display=swap">
+  <link rel="stylesheet" href="/control-app/styles.css">
+  <link rel="stylesheet" href="/control-app/vendor/leaflet.css">
+  <script defer src="/control-app/vendor/leaflet.js"></script>
+  <script defer src="/control-app/vendor/xlsx.mini.min.js"></script>
+  <script type="module" src="/control-app/app.js"></script>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+  <dialog id="dialog" class="dialog"></dialog>
+  <noscript>본연 현장 작업 관리를 사용하려면 JavaScript를 켜 주세요.</noscript>
+</body>
+</html>
