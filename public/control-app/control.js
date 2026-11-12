@@ -7,6 +7,8 @@ import { completionProgress } from './report-completion.js';
 import { evidenceZoneBatchEditor, evidenceZoneEditor, evidenceZoneMoveMessage, mountEvidenceZoneEditors } from './evidence-zone.js';
 import { operationsTasksSection, mountOperationsTasks } from './analytics.js';
 import { focusFieldIssue } from './form-guidance.js';
+import { createReportAutosave } from './report-autosave.js';
+import { mailConsentState, workerEarningsMarkup } from './control-presentation.js';
 
 const reportStatuses = { submitted: '확인 대기', approved: '승인', revision: '보완 요청' };
 const evidencePhotoLabels = { exteriorBefore: '외함 작업 전', exteriorAfter: '외함 작업 후', interiorBefore: '내함 작업 전', interiorAfter: '내함 작업 후' };
@@ -269,22 +271,25 @@ export function mountControl(root, account, api, signal) {
   const admin = ['owner', 'admin'].includes(account.role);
   const currentDay = today();
   root.innerHTML = `
-    ${admin ? `<section class="card ops-upload stack" aria-labelledby="control-actions-title">
+    ${admin ? `<section class="card ops-upload stack" data-admin-overview aria-labelledby="control-actions-title">
       <div class="row between"><h2 id="control-actions-title">처리할 업무</h2><button class="btn compact" type="button" data-refresh-control>새로고침</button></div>
       <div class="control-actions" data-control-actions><p class="small muted">현장 보고와 메일 상태를 불러오는 중입니다.</p></div>
     </section>` : ''}
     ${admin ? '' : fieldGuidePage(detailHref('worker',account.id,currentDay))}
-    ${admin ? `<div class="row control-jumps" role="group" aria-label="관제 메뉴">
-      <button class="btn compact" type="button" data-control-jump="work-plans">정기 작업</button>
-      <button class="btn compact" type="button" data-control-jump="work-evidence">충전기 증빙</button>
-      <button class="btn compact" type="button" data-control-jump="field-report">현장 보고</button>
-      <button class="btn compact" type="button" data-control-jump="operations-tasks">업무 목록</button><button class="btn compact" type="button" data-control-jump="work-settlement">월 마감</button><button class="btn compact" type="button" data-control-jump="report-mail">리포트 메일</button><a class="btn compact" href="#analytics">운영 분석</a>
-    </div>` : ''}
+    ${admin ? `<div class="control-tabs" role="tablist" aria-label="관리자 업무">
+      ${[['home','오늘 할 일'],['sites','현장·배정'],['reviews','승인·증빙'],['finance','정산'],['mail','메일'],['settings','운영 설정']].map(([id,label])=>
+        `<button class="btn compact" type="button" role="tab" id="control-tab-${id}" data-control-tab="${id}" aria-controls="control-panel-${id}" aria-selected="${id==='home'}" tabindex="${id==='home' ? '0' : '-1'}">${label}</button>`).join('')}
+    </div><section class="card control-context row" aria-label="공통 조회 조건">
+      <label class="field grow"><span>선택 현장</span><select data-context-site>${option('','현장을 선택해 주세요')}</select></label>
+      <label class="field"><span>조회 월 · 보고·증빙·정산 함께</span><input type="month" data-context-month value="${currentDay.slice(0,7)}" max="${currentDay.slice(0,7)}"></label>
+      <a class="btn compact" href="#analytics">운영 분석</a>
+    </section>` : ''}
     <p class="control-notice" data-control-status role="status"></p>
     ${admin ? operationsTasksSection() : ''}
     ${workflowsPage(admin, currentDay)}
     <section class="card ops-upload stack" id="field-report" ${admin ? '' : 'data-guide-screen="report" hidden'}>
       ${admin ? '<h2>일일 현장 보고 제출</h2><div class="stack" data-report-drafts></div>' : ''}
+      ${admin ? '<p class="small muted">대행 등록·자료 보정용 입력입니다. 관리자가 직접 청소할 때는 청소 진행자 모드를 이용하고, 대행 등록 후 정산에서 실제 작업자를 확인해 주세요.</p>' : ''}
       <form class="stack" data-control="report">
         <div class="row" ${admin ? '' : 'hidden'}>
           <label class="field grow"><span>작업 현장</span><select name="siteId" required><option value="">현장을 선택해 주세요</option></select></label>
@@ -313,13 +318,14 @@ export function mountControl(root, account, api, signal) {
         <div class="row"><button class="btn primary" type="submit" data-submit-completion disabled>${admin ? '현장 보고 제출' : '작업 완료 등록'}</button>
           ${admin ? '' : '<button class="btn" type="button" data-guide-action="remaining" hidden>남은 충전기 작업하기</button>'}
           <button class="btn" type="button" data-save-report-draft>보고 임시저장</button></div>
+        <p class="small" role="status" data-report-autosave></p>
       </form>
       ${admin ? '<div class="stack" data-partial-reports></div>' : ''}
     </section>
     <section class="card ops-upload stack" id="control-reviews" ${admin ? '' : 'data-guide-screen="history" hidden'}>
       <div class="row between"><h2>${admin ? '현장 보고 확인' : '내 현장 보고'}</h2>
         ${admin ? `<label class="field"><span>보고 상태</span><select data-report-filter>${option('', '전체')}${Object.entries(reportStatuses).map(([value, label]) => option(value, label)).join('')}</select></label>` : ''}
-        <label class="field"><span>보고 월</span><input type="month" data-control-month value="${currentDay.slice(0, 7)}"></label>
+        <label class="field" ${admin ? 'hidden' : ''}><span>조회 월 · 보고·증빙 함께</span><input type="month" data-control-month value="${currentDay.slice(0, 7)}"></label>
       </div>
       <div data-control-reports class="stack">현장 보고를 불러오는 중입니다.</div>
       ${admin ? '' : '<div class="stack" data-partial-reports></div>'}
@@ -340,6 +346,7 @@ export function mountControl(root, account, api, signal) {
         <strong data-mail-subject></strong><p class="small muted" data-mail-recipient></p>
         <ul class="small stack mail-checks" data-mail-warnings hidden></ul>
         <ul class="small stack mail-checks error" data-mail-blocking hidden></ul>
+        <label class="check historical-mail-consent" data-historical-consent hidden><input type="checkbox" data-allow-historical><span data-historical-consent-text></span></label>
         <div class="row" data-mail-resolution hidden>
           <button class="btn compact" type="button" data-control-jump="control-recipients">수신처 설정</button>
           <button class="btn compact" type="button" data-preview-ledger>해당 월 정산 열기</button>
@@ -360,8 +367,8 @@ export function mountControl(root, account, api, signal) {
         <div class="stack" data-office-test-results aria-live="polite"></div>
       </details>` : ''}
     </section>
-    <details class="card ops-upload" id="control-recipients"><summary><strong>현장별 클라이언트·보고 수신처 설정</strong></summary>
-      <div class="stack region-refresh">
+    <section class="card ops-upload stack" id="control-settings"><h2>운영 발송 설정</h2>
+      <p class="small muted">회사 전체에 적용되는 관리자·세무 수신처와 자동 발송 설정입니다. 현장별 클라이언트 주소는 현장·배정에서 관리합니다.</p>
         <form class="row" data-control="settings">
           ${textField('관리자 보고 수신 이메일', 'email', 'email', 'required maxlength="254"')}
           ${textField('세무 담당자 수신 이메일', 'taxEmail', 'email', 'maxlength="254"')}
@@ -370,6 +377,9 @@ export function mountControl(root, account, api, signal) {
           <button class="btn compact" type="submit">수신 이메일 저장</button>
         </form>
         <p class="small muted">작업자별 발송을 끄면 작업자 안내를 본연 Gmail로 보냅니다. 세무 자료는 월 마감과 필수 금액 확인을 마친 뒤 등록한 주소로 보냅니다.</p>
+    </section>
+    <details class="card ops-upload" id="control-recipients"><summary><strong>현장별 클라이언트 수신처</strong></summary>
+      <div class="stack region-refresh">
         <form class="row" data-control="site">
           <label class="field"><span>현장</span><select name="siteId" required></select></label>
           <label class="field"><span>단가 적용 구역</span><select name="region"></select></label>
@@ -378,7 +388,7 @@ export function mountControl(root, account, api, signal) {
               placeholder="client1@company.com&#10;client2@company.com" aria-describedby="client-recipient-help"></textarea></label>
           <button class="btn compact" type="submit">현장 설정 저장</button>
         </form>
-        <p class="small muted" id="client-recipient-help">이메일을 한 줄에 하나씩 입력하세요. 쉼표·세미콜론으로도 구분할 수 있습니다. 최종 완료를 관리자가 승인하면 다음 자동 실행에서 주소별로 각각 발송합니다. 부분 완료·확인 대기·보완 요청 상태에서는 발송하지 않습니다.</p>
+        <p class="small muted" id="client-recipient-help">이메일을 한 줄에 하나씩 입력하세요. 쉼표·세미콜론으로도 구분할 수 있습니다. 새로 지정한 주소는 저장 이후 최종 완료 승인된 보고부터 자동 발송합니다. 과거 보고는 메일 미리보기에서 대상과 작업일을 확인한 뒤 별도로 발송할 수 있습니다. 부분 완료·확인 대기·보완 요청 상태에서는 발송하지 않습니다.</p>
         <p class="small" data-client-recipient-count aria-live="polite"></p>
       </div>
     </details>` : ''}
@@ -397,6 +407,7 @@ export function mountControl(root, account, api, signal) {
   const mailBox = root.querySelector('[data-mail-preview]');
   let model;
   let preview;
+  let previewData;
   let requestIndex = 0;
   let previewIndex = 0;
   let completionIndex = 0;
@@ -405,6 +416,58 @@ export function mountControl(root, account, api, signal) {
   let siteDirty = false;
   let siteEditVersion = 0;
   const inProgress = new WeakSet();
+  let activeAdminPanel='home';
+  const panelForSection={
+    'operations-tasks':'home','work-plans':'sites','control-recipients':'sites','control-reviews':'reviews',
+    'work-evidence-history':'reviews','work-evidence':'reviews','field-report':'reviews',
+    'work-settlement':'finance','report-mail':'mail','mail-history':'mail','control-settings':'settings','office-test':'settings',
+  };
+
+  function activatePanel(id,{focus=false}={}) {
+    if (!admin || !root.querySelector(`[data-admin-panel="${id}"]`)) return;
+    activeAdminPanel=id;
+    for (const panel of root.querySelectorAll('[data-admin-panel]')) panel.hidden=panel.dataset.adminPanel!==id;
+    for (const button of root.querySelectorAll('[data-control-tab]')) {
+      const selected=button.dataset.controlTab===id;
+      button.setAttribute('aria-selected',String(selected));button.tabIndex=selected ? 0 : -1;
+      if (selected && focus) button.focus();
+    }
+  }
+
+  if (admin) {
+    const panels=new Map();
+    for (const id of ['home','sites','reviews','finance','mail','settings']) {
+      const panel=document.createElement('section');
+      panel.id='control-panel-'+id;panel.dataset.adminPanel=id;panel.className='stack control-panel';
+      panel.setAttribute('role','tabpanel');panel.setAttribute('aria-labelledby','control-tab-'+id);
+      panels.set(id,panel);root.append(panel);
+    }
+    const move=(id,selector)=>{ const item=root.querySelector(selector);if(item)panels.get(id).append(item); };
+    move('home','[data-admin-overview]');move('home','#operations-tasks');
+    move('sites','#work-plans');move('sites','#control-recipients');
+    move('reviews','#control-reviews');move('reviews','#work-evidence-history');
+    const advanced=document.createElement('details');advanced.className='card ops-upload';advanced.id='admin-delegate-tools';
+    advanced.innerHTML='<summary><strong>대행 등록·자료 보정 · 고급</strong></summary><p class="small">관리자가 직접 청소하는 경우에는 청소 진행자 모드로 전환하세요. 이 입력은 누락 자료를 대행 등록하거나 보정할 때 사용합니다.</p><div><button class="btn compact" type="button" data-open-cleaner-mode>청소 진행자 모드로 전환</button></div>';
+    for (const id of ['work-evidence','field-report']) {const item=root.querySelector('#'+id);if(item)advanced.append(item);}
+    panels.get('reviews').append(advanced);
+    move('finance','#work-settlement');move('mail','#report-mail');move('settings','#control-settings');
+    const officeTest=root.querySelector('#office-test');
+    if (officeTest) {
+      const diagnostics=document.createElement('details');diagnostics.className='card ops-upload';diagnostics.id='system-diagnostics';
+      diagnostics.innerHTML='<summary><strong>시스템 진단 · 고급</strong></summary><p class="small muted">검증용 메일은 실제 고객 보고와 구분하여 관리합니다.</p>';
+      diagnostics.append(officeTest);panels.get('settings').append(diagnostics);
+    }
+    activatePanel('home');
+    root.querySelector('[role="tablist"]').addEventListener('keydown',event=>{
+      if (!['ArrowRight','ArrowLeft','Home','End'].includes(event.key)) return;
+      const tabs=[...root.querySelectorAll('[data-control-tab]')];const index=tabs.indexOf(event.target);
+      if (index<0)return;
+      event.preventDefault();
+      const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+(event.key==='ArrowRight'?1:tabs.length-1))%tabs.length;
+      activatePanel(tabs[next].dataset.controlTab,{focus:true});
+    },{signal});
+    for (const input of root.querySelectorAll('[name="evidenceMonth"],[name="ledgerMonth"]')) input.closest('label').hidden=true;
+  } else root.querySelector('[name="evidenceMonth"]')?.closest('label').setAttribute('hidden','');
 
   function notify(text, error = false) {
     status.textContent = text;
@@ -415,6 +478,43 @@ export function mountControl(root, account, api, signal) {
   });
   const guide = admin ? null : mountFieldGuide(root,{ today:currentDay,api,signal,notify,workflow,prefillCompletion });
   const refreshTasks = admin ? mountOperationsTasks(root, api, signal) : null;
+  let reportDraftContext=null;
+  const reportSnapshot=()=>{
+    if (!reportDraftContext) return null;
+    const fields=reportForm.elements;
+    if (model?.reports.some(row=>row.siteId===reportDraftContext.siteId && row.workDate===reportDraftContext.workDate && row.status==='approved')) return null;
+    const payload={siteId:reportDraftContext.siteId,workDate:reportDraftContext.workDate,assignmentDue:reportDraftContext.assignment || '',notes:fields.notes.value,
+      completionMode:fields.completionMode.value || 'full'};
+    for (const name of ['units','exterior','interior']) payload[name]=admin
+      ? (fields[name].value==='' ? null : Number(fields[name].value)) : completionData?.[name] ?? null;
+    return {...reportDraftContext,payload};
+  };
+  const reportAutosave=createReportAutosave({
+    scope:'bonyeon-report-auto:'+JSON.stringify([location.pathname,account.id,account.role]),
+    storage:{getItem:key=>localStorage.getItem(key),setItem:(key,value)=>localStorage.setItem(key,value),removeItem:key=>localStorage.removeItem(key)},
+    read:reportSnapshot,
+    saveRemote:payload=>api('control/report-draft',{method:'PUT',body:payload,signal}),
+    status:(message,error=false)=>{
+      const output=reportForm.querySelector('[data-report-autosave]');output.textContent=message;output.classList.toggle('error',error);
+    },
+  });
+  reportForm.addEventListener('input',event=>{
+    if (['notes','units','exterior','interior'].includes(event.target.name)) reportAutosave.changed();
+  },{signal});
+  window.addEventListener('beforeunload',()=>reportAutosave.saveLocal(),{signal});
+  window.addEventListener('pagehide',()=>reportAutosave.saveLocal(),{signal});
+  window.addEventListener('online',()=>void reportAutosave.flushRemote(),{signal});
+  signal.addEventListener('abort',()=>reportAutosave.stop(),{once:true});
+  root.addEventListener('bonyeon-show-section',event=>{
+    const period=event.detail?.month;
+    if (/^\d{4}-\d{2}$/.test(period || '') && month.value!==period) {
+      month.value=period;
+      const context=root.querySelector('[data-context-month]');if(context)context.value=period;
+      if (previewForm) {previewForm.elements.month.value=period;clearPreview();}
+      void refresh();
+    }
+    showSection(event.detail?.id);
+  },{signal});
 
   function fillSiteSettings() {
     const site = model.sites.find(item => item.id === siteForm.elements.siteId.value);
@@ -438,6 +538,10 @@ export function mountControl(root, account, api, signal) {
 
   function showSection(id) {
     const section = root.querySelector('#' + id);
+    if (admin) {
+      activatePanel(panelForSection[id] || section?.closest('[data-admin-panel]')?.dataset.adminPanel || activeAdminPanel);
+      for (let parent=section?.parentElement;parent && parent!==root;parent=parent.parentElement) if(parent.tagName==='DETAILS')parent.open=true;
+    }
     if (section?.tagName === 'DETAILS') section.open = true;
     section?.scrollIntoView({ block: 'start' });
   }
@@ -464,18 +568,23 @@ export function mountControl(root, account, api, signal) {
     const contractorMissing = model.sites.filter(site => !site.contractorEmail).length;
     const reviewNeeded = model.deliveries.filter(mail => mail.holdAt || mail.canceledAt || (!mail.sentAt && !mail.queued &&
       Date.now() - Date.parse(mail.createdAt) > 900_000)).length;
-    const taxReady = Boolean(model.mailSettings?.taxEmail);
+    const late=model.sites.filter(site=>workflow.assignmentFor?.(site.id) && workflow.assignmentFor(site.id)<currentDay).length;
     const card = (label, detail, action) => `<button class="btn control-action" type="button" ${action}><strong>${label}</strong><span class="small">${detail}</span></button>`;
     root.querySelector('[data-control-actions]').innerHTML = [
       card('승인 대기', waiting + '건', 'data-action-report="submitted"'),
+      card('지연 작업',late+'곳','data-control-jump="work-plans"'),
       card('보완 요청', revisions + '건', 'data-action-report="revision"'),
-      card('수신처 설정', '계약자 미등록 ' + contractorMissing + '곳 · 세무 ' + (taxReady ? '등록됨' : '미등록'), 'data-control-jump="control-recipients"'),
       card('최근 메일', '확인 필요 ' + reviewNeeded + '건', 'data-control-jump="mail-history"'),
       card('처리할 업무 목록', '담당자·기한·보완 대상', 'data-control-jump="operations-tasks"'),
+      ...(contractorMissing ? [card('고객 수신처 확인',contractorMissing+'곳 미등록','data-control-jump="control-recipients"')] : []),
     ].join('');
   }
 
   async function refresh() {
+    const contextMonth=root.querySelector('[data-context-month]');
+    if (contextMonth) contextMonth.value=month.value;
+    if (previewForm && !preview) previewForm.elements.month.value=month.value;
+    workflow.setMonth?.(month.value,{refresh:false});
     const workflowUpdate = workflow.refresh();
     if (refreshTasks) void refreshTasks();
     const attempt = ++requestIndex;
@@ -490,22 +599,29 @@ export function mountControl(root, account, api, signal) {
         field.innerHTML = siteOptions;
         field.value = data.sites.some(site => site.id === previous) ? previous : '';
       }
+      const contextSite=root.querySelector('[data-context-site]');
+      if (contextSite) {const selected=contextSite.value;contextSite.innerHTML=siteOptions;contextSite.value=data.sites.some(site=>site.id===selected)?selected:'';}
+      await workflowUpdate;
+      if (signal.aborted || attempt!==requestIndex) return;
       updateReportList();
-      root.querySelector('[data-report-drafts]').innerHTML = data.drafts?.length ? `<details open><summary>내 임시저장 보고 ${data.drafts.length}건</summary>
-        <div class="row">${data.drafts.map(draft => `<button class="btn compact" type="button" data-resume-report="${esc(draft.siteId)}"
+      const drafts=[...(data.drafts || [])];
+      const localDraft=reportAutosave.resume();
+      if (localDraft && data.sites.some(site=>site.id===localDraft.siteId)
+        && localDraft.assignment===(workflow.assignmentFor?.(localDraft.siteId) || '')
+        && !data.reports.some(report=>report.siteId===localDraft.siteId && report.workDate===localDraft.workDate && report.status!=='revision')
+        && !drafts.some(draft=>draft.siteId===localDraft.siteId && draft.workDate===localDraft.workDate)) {
+        drafts.push({...localDraft,siteName:data.sites.find(site=>site.id===localDraft.siteId).name});
+      }
+      await guide?.restore?.();
+      root.querySelector('[data-report-drafts]').innerHTML = drafts.length ? `<details open><summary>내 임시저장 보고 ${drafts.length}건</summary>
+        <div class="row">${drafts.map(draft => `<button class="btn compact" type="button" data-resume-report="${esc(draft.siteId)}"
           data-work-date="${esc(draft.workDate)}">${esc(draft.siteName)} · ${esc(draft.workDate)} 이어쓰기</button>`).join('')}</div></details>` : '';
       root.querySelector('[data-partial-reports]').innerHTML = data.progress?.length ? `<h3>부분 완료 · 진행중</h3>${data.progress.map(row =>
         `<article class="report-control-row row between"><div><strong>${esc(row.siteName)}</strong>
         <p class="small">${esc(row.workDate)} · 완료 ${row.units} / ${row.plannedUnits}기 · 남은 수량 ${row.plannedUnits - row.units}기</p></div>
         <button class="btn compact" type="button" data-resume-report="${esc(row.siteId)}" data-work-date="${currentDay}">이어서 완료 보고</button></article>`).join('')}` : '';
       if (!admin) {
-        const amount = value => BigInt(value || '0').toLocaleString('ko-KR') + '원';
-        const { expected,approved,unpriced,unapproved,internalUnits,internalPlanned } = data.earnings;
-        root.querySelector('[data-worker-earnings]').innerHTML = `<div><dt>현재 배정 현장 예상 총액</dt><dd>${amount(expected)}</dd>
-          ${unpriced ? `<p class="small">수량 또는 단가 미확정 ${unpriced}곳 제외</p>` : ''}</div>
-          <div><dt>${esc(month.value)} 승인 달성 금액</dt><dd>${amount(approved)}</dd>
-          ${unapproved ? `<p class="small">단가 미확정 승인 건 ${unapproved}건 제외</p>` : ''}</div>
-          ${account.canSwitchMode ? `<div><dt>관리자 직접 작업 · 지급 제외</dt><dd>현재 배정 ${internalPlanned}기 · 이달 승인 ${internalUnits}기</dd></div>` : ''}`;
+        root.querySelector('[data-worker-earnings]').innerHTML = workerEarningsMarkup(data.earnings,month.value,Boolean(account.canSwitchMode));
       }
       if (admin) {
         if (!settingsDirty) {
@@ -551,7 +667,8 @@ export function mountControl(root, account, api, signal) {
     mailBox.hidden = true;
     const data = await api('control/mail?' + new URLSearchParams({ kind, reference }), { signal });
     if (signal.aborted || attempt !== previewIndex) return;
-    preview = { kind, reference, recipient: data.recipient, previewToken: data.previewToken };
+    preview = { kind, reference, recipient: data.recipient, previewToken: data.previewToken,allowHistorical:false };
+    previewData=data;
     mailBox.querySelector('[data-mail-subject]').textContent = data.subject;
     mailBox.querySelector('[data-mail-recipient]').textContent = data.recipients?.length
       ? `받는 사람 ${data.recipients.length}명 · 주소별 개별 발송 · ` + data.recipients.join(', ')
@@ -569,7 +686,14 @@ export function mountControl(root, account, api, signal) {
     plain.hidden = Boolean(data.html);
     formatted.hidden = !data.html;
     formatted.srcdoc = data.html || '';
-    mailBox.querySelector('[data-send-control-mail]').disabled = !data.recipient || !data.mailReady || Boolean(data.blocking?.length);
+    const consent=mailBox.querySelector('[data-historical-consent]');
+    const checkbox=mailBox.querySelector('[data-allow-historical]');
+    checkbox.checked=false;consent.hidden=!data.requiresHistoricalConsent;
+    const historical=(data.historicalRecipients || []).map(value=>typeof value==='string'?value:value.email).filter(Boolean);
+    mailBox.querySelector('[data-historical-consent-text]').textContent=data.requiresHistoricalConsent
+      ? `${data.subject} — 과거 완료 보고를 다음 수신처 ${historical.length}곳에 별도로 발송하는 데 동의합니다: ${historical.join(', ')}` : '';
+    mailBox.querySelector('[data-send-control-mail]').disabled = !mailConsentState(data,false).canSend;
+    showSection('report-mail');
     mailBox.hidden = false;
     mailBox.scrollIntoView({ block: 'nearest' });
   }
@@ -588,6 +712,8 @@ export function mountControl(root, account, api, signal) {
   function clearPreview() {
     previewIndex++;
     preview = null;
+    previewData=null;
+    mailBox.querySelector('[data-allow-historical]').checked=false;
     mailBox.hidden = true;
   }
 
@@ -645,8 +771,10 @@ export function mountControl(root, account, api, signal) {
       throw new Error('배정된 현장 정보를 불러온 뒤 다시 시도해 주세요.');
     }
     const previous = model?.reports.find(row => row.siteId === siteId && row.workDate === workDate);
-    const currentNotes = !admin && completionData && fields.siteId.value===siteId && fields.workDate.value===workDate
+    const currentNotes = completionData && reportDraftContext?.siteId===siteId && reportDraftContext?.workDate===workDate
       ? fields.notes.value : null;
+    reportAutosave.saveLocal();
+    reportDraftContext=null;
     fields.siteId.value = siteId;
     fields.workDate.value = workDate;
     completionData = null;
@@ -658,12 +786,17 @@ export function mountControl(root, account, api, signal) {
       if (signal.aborted || attempt !== completionIndex) return;
       completionData = data;
       const draft = restore ? data.draft : null;
-      fields.notes.value = currentNotes ?? draft?.notes ?? previous?.notes ?? data.progressNotes ?? '';
+      reportDraftContext={siteId,workDate,assignment:data.assignmentDue ?? workflow.assignmentFor?.(siteId) ?? ''};
+      const local=restore && previous?.status!=='approved' ? reportAutosave.restore(siteId,workDate,reportDraftContext.assignment) : null;
+      const localPayload=local && (!draft?.updatedAt || local.savedAt>=draft.updatedAt) ? local.payload : null;
+      fields.notes.value = currentNotes ?? localPayload?.notes ?? draft?.notes ?? previous?.notes ?? data.progressNotes ?? '';
       if (admin) {
-        fields.units.value=draft ? draft.units ?? '' : previous?.units ?? (Math.max(data.units,data.previousUnits ?? 0) || '');
-        fields.exterior.value=draft ? draft.exterior ?? '' : previous?.exterior ?? Math.max(data.exterior,data.previousExterior ?? 0);
-        fields.interior.value=draft ? draft.interior ?? '' : previous?.interior ?? (Math.max(data.interior,data.previousInterior ?? 0) || '');
+        const restored=localPayload || draft;
+        fields.units.value=restored ? restored.units ?? '' : previous?.units ?? (Math.max(data.units,data.previousUnits ?? 0) || '');
+        fields.exterior.value=restored ? restored.exterior ?? '' : previous?.exterior ?? Math.max(data.exterior,data.previousExterior ?? 0);
+        fields.interior.value=restored ? restored.interior ?? '' : previous?.interior ?? (Math.max(data.interior,data.previousInterior ?? 0) || '');
       }
+      if (localPayload) reportForm.querySelector('[data-report-autosave]').textContent='이 기기에 자동 저장한 보고를 복원했습니다.';
       updateCompletionMode();
       return data;
     } catch (error) {
@@ -698,7 +831,33 @@ export function mountControl(root, account, api, signal) {
     }).join('') : '<p class="small muted">오늘 등록한 검증용 메일이 없습니다.</p>';
   }
 
-  month.addEventListener('change', refresh, { signal });
+  month.addEventListener('change', () => {
+    const contextMonth=root.querySelector('[data-context-month]');if(contextMonth)contextMonth.value=month.value;
+    if (previewForm) {previewForm.elements.month.value=month.value;clearPreview();}
+    void refresh();
+  }, { signal });
+  root.querySelector('[data-context-month]')?.addEventListener('change',event=>{
+    month.value=event.target.value;
+    month.dispatchEvent(new Event('change'));
+  },{signal});
+  root.querySelector('[data-context-site]')?.addEventListener('change',event=>{
+    const siteId=event.target.value;
+    if (siteDirty && siteForm.elements.siteId.value!==siteId && !window.confirm('입력 중인 클라이언트 수신처를 저장하지 않고 다른 현장을 선택할까요?')) {
+      event.target.value=siteForm.elements.siteId.value;return;
+    }
+    reportAutosave.saveLocal();
+    try {if(workflow.form.elements.siteId.value)workflow.draft?.save?.();}catch(error){notify(error.message,true);return;}
+    for (const form of root.querySelectorAll('form[data-work="plan"],form[data-work="quantity"],form[data-work="evidence"],form[data-control="site"],form[data-control="report"]')) {
+      const field=form.elements.siteId;
+      if (field && [...field.options].some(option=>option.value===siteId)) {field.value=siteId;field.dispatchEvent(new Event('change',{bubbles:true}));}
+    }
+  },{signal});
+  mailBox?.querySelector('[data-allow-historical]').addEventListener('change',event=>{
+    if (!preview || !previewData) return;
+    const state=mailConsentState(previewData,event.target.checked);
+    preview.allowHistorical=state.accepted;
+    mailBox.querySelector('[data-send-control-mail]').disabled=!state.canSend;
+  },{signal});
   reportFilter?.addEventListener('change', updateReportList, { signal });
   settings?.addEventListener('input', () => { settingsDirty = true; }, { signal });
   siteForm?.addEventListener('input', event => {
@@ -746,14 +905,24 @@ export function mountControl(root, account, api, signal) {
           else notify(message,true);
           return;
         }
-        await api('control/report', { method: 'POST', body: { siteId, workDate, notes, units, exterior, interior,completionMode } });
+        const completedDraft=reportSnapshot();
+        const disabled=new Map([...form.elements].map(field=>[field,field.disabled]));
+        for (const field of disabled.keys()) field.disabled=true;
+        try {
+          await reportAutosave.pause();
+          await api('control/report', { method: 'POST', body: { siteId, workDate, notes, units, exterior, interior,completionMode } });
+          reportAutosave.clear(completedDraft);
+        } catch (error) {reportAutosave.unpause();throw error;}
+        finally {for (const [field,value] of disabled) field.disabled=value;}
         completionIndex++;
         month.value = workDate.slice(0, 7);
+        reportDraftContext=null;
         form.reset();
         completionData = null;
         updateCompletionMode();
         notify(completionMode === 'partial' ? '부분 완료를 등록했습니다. 현장은 진행중으로 표시됩니다.'
           : admin ? '현장 보고를 제출했습니다.' : '작업 완료를 등록했습니다. 관리자 확인을 기다립니다.');
+        guide?.reportSaved?.();
         guide?.home();
       } else if (action === 'preview') {
         const reference = { daily: data.day, contractor: data.report, worker: data.month + ':' + data.worker }[data.kind] ?? data.month;
@@ -795,10 +964,23 @@ export function mountControl(root, account, api, signal) {
   }, { signal });
 
   root.addEventListener('click', event => {
+    const tab=event.target.closest('[data-control-tab]');
+    if (tab) {activatePanel(tab.dataset.controlTab);return;}
+    if (event.target.closest('[data-open-cleaner-mode]')) {
+      document.querySelector('[data-action="toggle-work-mode"]')?.click();return;
+    }
     const recipientButton = event.target.closest('button[data-site-recipients]');
     if (recipientButton && siteForm) {
+      const nextSite=recipientButton.dataset.siteRecipients;
+      if (siteDirty && siteForm.elements.siteId.value===nextSite) {
+        showSection('control-recipients');
+        siteForm.elements.contractorEmails.focus();
+        return;
+      }
+      if (siteDirty && !window.confirm('입력 중인 클라이언트 수신처를 저장하지 않고 다른 현장을 선택할까요?')) return;
       siteEditVersion++;
       siteForm.elements.siteId.value = recipientButton.dataset.siteRecipients;
+      root.querySelector('[data-context-site]').value=recipientButton.dataset.siteRecipients;
       siteDirty = false;
       fillSiteSettings();
       showSection('control-recipients');
@@ -853,6 +1035,7 @@ export function mountControl(root, account, api, signal) {
           payload[name]=admin ? (payload[name]==='' ? null : Number(payload[name])) : completionData?.[name] ?? null;
         }
         payload.completionMode ||= 'full';
+        payload.assignmentDue=workflow.assignmentFor?.(payload.siteId) || '';
         await api('control/report-draft',{ method:'PUT',body:payload,signal });
         notify('보고를 임시저장했습니다.');
         await refresh();
@@ -898,5 +1081,5 @@ export function mountControl(root, account, api, signal) {
     });
   }, { signal });
 
-  refresh();
+  void refresh().then(()=>{if (location.hash==='#history')guide?.history?.();});
 }

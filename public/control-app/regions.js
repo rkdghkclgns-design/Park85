@@ -6,7 +6,7 @@ const formatNumber = value => value.toLocaleString('ko-KR');
 const formatPrice = value => value == null ? '미입력' : formatNumber(value) + '원 / 기';
 const priceLabels = { contract: '실제 계약단가', worker: '작업자 청소단가' };
 
-function regionTable(regions, editable, role) {
+export function regionTable(regions, editable, role) {
   const kinds = editable ? ['contract', 'worker'] : role === 'cleaner' ? ['worker'] : [];
   return `<div class="table-scroll"><table class="region-table">
     <thead><tr><th scope="col">구역</th><th scope="col">등록 충전기</th>${kinds.map(kind => `<th scope="col">${priceLabels[kind]}<br><span class="small muted">원 / 기</span></th>`).join('')}</tr></thead>
@@ -19,7 +19,7 @@ function regionTable(regions, editable, role) {
           <input type="number" name="price" min="0" step="1" inputmode="numeric" aria-label="${name} ${label} (원)" placeholder="미입력" value="${price ?? ''}">
           <button class="btn compact" type="submit" aria-label="${name} ${label} 저장">저장</button>
           <span class="small muted" data-price-message role="status"></span>
-        </form></td>` : `<td>${formatPrice(price)}</td>`;
+        </form></td>` : `<td>${role==='cleaner' && !Object.hasOwn(region,'workerPrice') ? '— (내 배정 지역만 표시)' : formatPrice(price)}</td>`;
       }).join('');
       return `<tr><th scope="row">${name}</th><td data-region-count="${name}">${formatNumber(region.count)}기</td>${prices}</tr>`;
     }).join('')}</tbody>
@@ -58,6 +58,7 @@ export function mountRegions(root, account, api, signal) {
   root.innerHTML = `<section class="card ops-upload stack">
     <div class="row between"><h2>구역별 등록 충전기</h2><strong data-region-total></strong></div>
     <p class="small muted">${sourceLink} · <span data-region-date>집계 기준일을 불러오는 중입니다.</span></p>
+    ${account.role==='cleaner' ? '<p class="small muted">충전기 등록 수량은 전국 공개 집계입니다. 작업자 청소단가는 현재 본인에게 배정된 현장의 지역만 표시합니다. 실제 승인 수익과 지급 내역은 내 지급 내역에서 확인해 주세요.</p>' : ''}
     <div data-region-table role="region" aria-label="구역별 충전기 수량 및 청소단가"></div>
   </section>
   ${editable ? `<details class="card ops-upload"><summary><strong>공식 집계 갱신</strong></summary>

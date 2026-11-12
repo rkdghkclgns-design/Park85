@@ -109,7 +109,7 @@ export function workflowsPage(admin, today) {
         <p class="small" data-evidence-draft-status role="status"></p>
       </form>
     </section>
-    <section class="card ops-upload stack" ${admin ? '' : 'data-guide-screen="history" hidden'}>
+    <section class="card ops-upload stack" id="work-evidence-history" ${admin ? '' : 'data-guide-screen="history" hidden'}>
       <div class="row between"><h3>등록된 증빙</h3>${label('증빙 조회 월', 'evidenceMonth', 'month', `value="${today.slice(0, 7)}"`)}</div>
       <div class="stack" data-work-evidence></div>
     </section>
@@ -295,6 +295,7 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
   let ledgerWorkers = [];
   let overviewToken = 0;
   let ledgerToken = 0;
+  let evidenceLocked=false;
   const working = new WeakSet();
   const getSite = id => model?.sites.find(site => site.id === id);
 
@@ -313,11 +314,11 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
       const needed = evidence.elements.interior.checked;
       if (!needed) isolation.checked=false;
       isolation.closest('label').hidden=!needed;
-      isolation.disabled=!needed;
+      isolation.disabled=evidenceLocked || !needed;
       isolation.required=needed;
       const interiorNote = evidence.elements.interiorResultNote;
       interiorNote.closest('[data-interior-result]').hidden=!needed;
-      interiorNote.disabled=!needed;
+      interiorNote.disabled=evidenceLocked || !needed;
     }
     for (const scope of ['exterior', 'interior']) {
       const row = evidence.querySelector('[data-photo-pair="' + scope + '"]');
@@ -325,12 +326,13 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
       const enabled = evidence.elements[scope].checked && evidence.querySelector('[data-verification-file]').checked;
       row.hidden = !enabled;
       for (const input of row.querySelectorAll('input')) {
-        input.disabled = !enabled;
+        input.disabled = evidenceLocked || !enabled;
         input.required = enabled;
       }
     }
   }
-  const draft = evidenceDrafts(evidence,userId);
+  const draft = evidenceDrafts(evidence,userId,{signal,getAssignmentDue:siteId=>getSite(siteId)?.nextDue || '',
+    onError:error=>notify(error.message,true)});
   const camera = mountCamera(evidence, api, signal, notify, fillPhotoFields, userId, draft, refresh);
   function renderDevices() {
     if (!guide) return;
@@ -349,6 +351,7 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
   }
 
   async function setEvidenceSite(siteId,workDate) {
+    draft.flush();
     evidence.elements.siteId.value=siteId;
     evidence.elements.workDate.value=workDate;
     updateDraftButton();
@@ -371,6 +374,16 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
       return false;
     }
     return true;
+  }
+  function setupValid() {
+    const fields=evidence.elements;
+    return ['workDate','chargerType','canopy'].every(name=>fields[name].validity.valid)
+      && (fields.exterior.checked || fields.interior.checked)
+      && Object.keys(safetyChecks).every(key=>fields['guide_'+key].disabled || fields['guide_'+key].checked);
+  }
+  function resetSafety() {
+    for (const name of ['safety',...Object.keys(safetyChecks).map(key=>'guide_'+key)]) evidence.elements[name].checked=false;
+    draft.save({automatic:true});
   }
   const fillQuantity = () => { quantity.elements.plannedUnits.value = getSite(quantity.elements.siteId.value)?.configuredUnits ?? ''; };
 
@@ -435,7 +448,10 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
     }
   }
 
-  function show(form) { form.scrollIntoView({ block: 'center' }); form.elements.siteId.focus({ preventScroll: true }); }
+  function show(form) {
+    root.dispatchEvent(new CustomEvent('bonyeon-show-section',{detail:{id:form.closest('section')?.id}}));
+    form.scrollIntoView({ block: 'center' }); form.elements.siteId.focus({ preventScroll: true });
+  }
   function updatePaymentFields(form) {
     const entries = [...form.querySelectorAll('[data-payment-worker]')].map(row => {
       const internal = row.querySelector('[name="actualWorker"]').selectedOptions[0]?.dataset.internal === '1';
@@ -521,6 +537,10 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
           focusFieldIssue(form.elements.faultNote, '발견한 이상을 메모에 입력해 주세요.');
           return;
         }
+        const locked=[...form.querySelectorAll('input,select,textarea,button')].map(field=>[field,field.disabled]);
+        evidenceLocked=true;
+        for (const [field] of locked) field.disabled=true;
+        try {
         if (camera.usesFiles()) {
           for (const slot of Object.keys(slots)) {
             const photo = payload.get(slot);
@@ -548,6 +568,11 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
         notify('충전기 증빙을 저장했습니다.');
         guide?.onSaved(data.siteId,data.workDate);
         await refresh();
+        } finally {
+          evidenceLocked=false;
+          for (const [field,disabled] of locked) if (field.isConnected) field.disabled=disabled;
+          fillPhotoFields();
+        }
       } else if (action === 'issue') {
         await api('work/issue', { method: 'PATCH', body: { id: form.dataset.id, ...data }, signal });
         notify('후속 조치를 저장했습니다.');
@@ -614,6 +639,7 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
       return;
     }
     if (button.dataset.checkPayment) {
+      root.dispatchEvent(new CustomEvent('bonyeon-show-section',{detail:{id:'work-settlement'}}));
       const row = [...ledger.querySelectorAll('[data-ledger-report]')].find(item => item.dataset.ledgerReport === button.dataset.checkPayment);
       if (row) {
         row.open = true;
@@ -634,6 +660,7 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
     const { editPlan, addProof, removeProof } = button.dataset;
     if (button.dataset.openEvidence) run(button, async () => {
       evidenceMonth.value = button.dataset.workDate.slice(0, 7);
+      root.dispatchEvent(new CustomEvent('bonyeon-show-section',{detail:{id:'work-evidence-history',month:evidenceMonth.value}}));
       await refresh();
       const item = [...root.querySelectorAll('[data-evidence-row]')].find(row => row.dataset.evidenceRow === button.dataset.openEvidence);
       if (!item) throw new Error('증빙 목록에서 이 건을 찾을 수 없습니다. 보고 상세를 열어 주세요.');
@@ -666,5 +693,26 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
       });
     }
   }, { signal });
-  return { refresh:()=>Promise.all([refresh(),refreshLedger()]), form:evidence, camera, setEvidenceSite, checkSetup };
+  return {
+    refresh:()=>Promise.all([refresh(),refreshLedger()]),form:evidence,camera,draft,setEvidenceSite,checkSetup,setupValid,resetSafety,
+    assignmentFor:siteId=>getSite(siteId)?.nextDue || '',
+    recheckAssignment() { draft.restore();fillPhotoFields(); },
+    getMonth:()=>evidenceMonth.value,
+    setMonth(month,{refresh:reload=true}={}) {
+      if (!/^\d{4}-\d{2}$/.test(month)) return Promise.resolve();
+      evidenceMonth.value=month;
+      if (ledgerMonth) ledgerMonth.value=month;
+      return reload ? Promise.all([refresh(),refreshLedger()]) : Promise.resolve();
+    },
+    async restoreDraft(saved) {
+      const site=getSite(saved?.siteId);
+      if (!site || saved.assignmentDue!==site.nextDue || saved.workDate<site.nextDue || saved.workDate>today) return false;
+      await setEvidenceSite(saved.siteId,saved.workDate);
+      await camera.selectZone(saved.zoneId,saved.zoneName);
+      if (evidence.elements.zoneId.value!==(saved.zoneId || '')) return false;
+      if (saved.assetCode && saved.assetCode!==evidence.elements.assetCode.value) draft.useDevice(saved.assetCode,saved.assetLabel);
+      fillPhotoFields();renderDevices();await camera.reset();
+      return !signal.aborted;
+    },
+  };
 }

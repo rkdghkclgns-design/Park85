@@ -221,12 +221,16 @@ export function mountCamera(evidence, api, signal, notify, onModeChange, userId,
     }
   }
 
-  async function refreshZones(selected = '') {
+  async function refreshZones(selected = '', offlineName = '') {
     const token = ++latestZoneRequest;
     const siteId = evidence.elements.siteId.value;
     renamePanel.hidden=true;
     function showZones(zones) {
       zone.innerHTML = '<option value="">구역 미지정</option>' + zones.map(item => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join('');
+      if (selected && !navigator.onLine && !zones.some(item=>item.id===selected)) {
+        zone.insertAdjacentHTML('beforeend',`<option value="${esc(selected)}">${esc(offlineName || '저장된 구역')} · 오프라인 보관</option>`);
+        zone.value=selected;
+      }
       if (zones.some(item => item.id === selected)) zone.value = selected;
       renameZoneButton.hidden=!zone.value;
       deleteZoneButton.hidden=!zone.value;
@@ -414,6 +418,9 @@ export function mountCamera(evidence, api, signal, notify, onModeChange, userId,
           if (blob.size > 1_200_000) throw new Error('사진이 너무 큽니다. 다시 촬영해 주세요.');
           await writeQueuedPhoto({ id: crypto.randomUUID(), owner, fields, slot, blob, time: Date.now(), assetLabel:evidence.dataset.assetLabel,
             siteName: evidence.elements.siteId.selectedOptions[0]?.textContent || '', zoneName: zone.value ? zone.selectedOptions[0].textContent : '' });
+          if (draftKey(fields)===draftKey(context())) {
+            try { draft.save({automatic:true}); } catch (error) { notify(error.message,true); }
+          }
           await refreshQueue();
           status.textContent = '이 기기에 저장했습니다. 추가로 촬영할 수 있습니다.';
           void syncQueue();

@@ -63,7 +63,7 @@ export async function readWorkCompletion(db, siteId, day, account, context) {
   validateProgressContext(siteId, day, context);
   const admin = Number(progressAdmin(account));
   const row = await db.prepare(`
-    SELECT COALESCE(g.planned_units,w.planned_units) AS plannedUnits, g.units AS previousUnits,
+    SELECT COALESCE(g.planned_units,w.planned_units) AS plannedUnits,p.next_due AS assignmentDue, g.units AS previousUnits,
       g.exterior AS previousExterior,g.interior AS previousInterior,g.last_date AS progressDate,
       CASE WHEN ? OR g.author_id=? THEN g.notes ELSE '' END AS progressNotes,
       COUNT(DISTINCT upper(trim(e.asset_code))) AS units,
@@ -79,14 +79,19 @@ export async function readWorkCompletion(db, siteId, day, account, context) {
   if (!row) throw new context.HttpError(404, '배정된 현장을 찾을 수 없습니다.');
   const draft = await db.prepare('SELECT data,updated_at AS updatedAt FROM work_report_drafts WHERE site_id=? AND work_date=? AND author_id=?')
     .bind(siteId,day,account.id).first();
-  return { ...row, draft: draft ? { ...JSON.parse(draft.data), updatedAt: draft.updatedAt } : null };
+  const saved=draft && JSON.parse(draft.data);
+  const current=saved && (!row.assignmentDue || (saved.assignmentDue ? saved.assignmentDue===row.assignmentDue : day>=row.assignmentDue));
+  return { ...row, draft: current ? { ...saved, updatedAt: draft.updatedAt } : null };
 }
 
 export async function readReportDraftList(db, account) {
   const { results } = await db.prepare(`
     SELECT d.site_id AS siteId,w.name AS siteName,d.work_date AS workDate,d.updated_at AS updatedAt
-    FROM work_report_drafts d JOIN work_sites w ON w.id=d.site_id LEFT JOIN work_plans p ON p.site_id=d.site_id
-    WHERE d.author_id=? AND (? OR p.worker_email=?) ORDER BY d.updated_at DESC LIMIT 100
+    FROM work_report_drafts d JOIN work_sites w ON w.id=d.site_id LEFT JOIN work_plan_cycles p ON p.site_id=d.site_id
+    WHERE d.author_id=? AND (? OR p.worker_email=?)
+      AND NOT EXISTS(SELECT 1 FROM field_reports r WHERE r.site_id=d.site_id AND r.work_date=d.work_date AND r.status IN ('submitted','approved'))
+      AND (p.site_id IS NULL OR (d.work_date>=p.next_due AND (json_extract(d.data,'$.assignmentDue') IS NULL OR json_extract(d.data,'$.assignmentDue')=p.next_due)))
+      ORDER BY d.updated_at DESC LIMIT 100
   `).bind(account.id,Number(progressAdmin(account)),account.email).all();
   return results;
 }
@@ -95,8 +100,9 @@ export async function saveReportDraft(db, body, account, context) {
   const { siteId, workDate, units, exterior, interior, completionMode } = body ?? {};
   validateProgressContext(siteId,workDate,context);
   const notes = progressText(body?.notes);
+  const assignmentDue=body?.assignmentDue || null;
   if (![units,exterior,interior].every(value => value == null || progressNumber(value)) || notes.length > 1500
-    || !['full','partial'].includes(completionMode)) {
+    || !['full','partial'].includes(completionMode) || (assignmentDue!==null && !context.validDate(assignmentDue))) {
     throw new context.HttpError(400, '임시저장할 수량과 메모를 확인해 주세요.');
   }
   const data = JSON.stringify({ units: units ?? null, exterior: exterior ?? null, interior: interior ?? null, completionMode, notes });
@@ -104,12 +110,15 @@ export async function saveReportDraft(db, body, account, context) {
   const updatedAt = new Date().toISOString();
   const result = await db.prepare(`
     INSERT INTO work_report_drafts(site_id,work_date,author_id,data,updated_at)
-    SELECT w.id,?,?,?,? FROM work_sites w LEFT JOIN work_plans p ON p.site_id=w.id
+    SELECT w.id,?,?,json_set(?,'$.assignmentDue',p.next_due),? FROM work_sites w LEFT JOIN work_plan_cycles p ON p.site_id=w.id
     WHERE w.id=? AND (? OR p.worker_email=?)
+      AND (? IS NULL OR p.next_due=?)
+      AND (? OR ?>=p.next_due)
       AND NOT EXISTS(SELECT 1 FROM settlement_months WHERE month=substr(?,1,7))
-      AND NOT EXISTS(SELECT 1 FROM field_reports r WHERE r.site_id=w.id AND r.work_date=? AND r.status='approved')
+      AND NOT EXISTS(SELECT 1 FROM field_reports r WHERE r.site_id=w.id AND r.work_date=? AND r.status IN ('submitted','approved'))
     ON CONFLICT(site_id,work_date,author_id) DO UPDATE SET data=excluded.data,updated_at=excluded.updated_at
-  `).bind(workDate,account.id,data,updatedAt,siteId,admin,account.email,workDate,workDate).run();
+  `).bind(workDate,account.id,data,updatedAt,siteId,admin,account.email,assignmentDue,assignmentDue,
+    admin,workDate,workDate,workDate).run();
   if (!result.meta.changes) throw new context.HttpError(409, '임시저장할 수 있는 배정 현장과 작업일을 확인해 주세요.');
   return { updatedAt };
 }

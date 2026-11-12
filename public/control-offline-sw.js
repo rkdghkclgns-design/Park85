@@ -1,9 +1,10 @@
-const cacheName = 'bonyeon-control-shell-v2';
+const cacheName = 'bonyeon-control-shell-v3';
 const files = [
   '', 'index.html', 'styles.css', 'app.js', 'portal-api.js', 'store.js', 'ui.js', 'reports.js', 'monthly.js',
   'operations.js', 'signup.js', 'form-guidance.js', 'regions.js', 'control.js', 'analytics.js', 'workflows.js',
   'camera.js', 'photo-queue.js', 'evidence-drafts.js', 'evidence-zone.js', 'field-guide.js', 'field-safety.js',
   'report-completion.js', 'settlement-export.js', 'public-intake.js',
+  'navigation.js','control-presentation.js','report-autosave.js','work-recovery.js',
   'vendor/leaflet.js', 'vendor/leaflet.css', 'vendor/xlsx.mini.min.js',
 ].map(file => '/control-app/'+file);
 const shellPaths = new Set(files);

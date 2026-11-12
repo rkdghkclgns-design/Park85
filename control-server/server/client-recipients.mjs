@@ -1,6 +1,7 @@
 import { validMailbox } from './addresses.mjs';
 
 export const maxClientRecipients = 20;
+export const legacyClientPolicy = '1970-01-01T00:00:00.000Z';
 
 export function normalizeClientRecipients(value) {
   const items = typeof value === 'string' ? value.split(/[,;\r\n]+/) : value;

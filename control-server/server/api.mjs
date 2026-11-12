@@ -325,11 +325,18 @@ export async function handleApi(request, env, handleControl, handleWorkflows) {
       requireRole(account, 'viewer');
       const admin = roleRank[account.role] >= roleRank.admin;
       const prices = admin ? ', contract_price AS contractPrice, worker_price AS workerPrice'
-        : account.role === 'cleaner' ? ', worker_price AS workerPrice' : '';
+        : account.role === 'cleaner' ? `, CASE WHEN EXISTS (SELECT 1 FROM site_reporting s JOIN work_plans p ON p.site_id=s.site_id
+          WHERE s.region_name=charger_regions.region_name AND p.worker_email=?) THEN worker_price END AS workerPrice,
+          EXISTS (SELECT 1 FROM site_reporting s JOIN work_plans p ON p.site_id=s.site_id
+            WHERE s.region_name=charger_regions.region_name AND p.worker_email=?) AS workerPriceVisible` : '';
       const { results } = await db.prepare(`
         SELECT region_name AS name, charger_count AS count, source_date AS sourceDate ${prices}
         FROM charger_regions ORDER BY charger_count DESC, region_name
-      `).all();
+      `).bind(...(account.role === 'cleaner' ? [account.email,account.email] : [])).all();
+      if (account.role==='cleaner') for (const row of results) {
+        if (!row.workerPriceVisible) delete row.workerPrice;
+        delete row.workerPriceVisible;
+      }
       return json({ regions: results, sourceDate: results[0]?.sourceDate ?? null });
     }
     if (path === '/api/charger-regions/price' && method === 'PATCH') return await saveCleaningPrice(db, request, env, account);

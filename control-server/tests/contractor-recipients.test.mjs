@@ -49,7 +49,7 @@ async function harness() {
   const seed = (status = 'approved', units = 2) => DB.prepare(`INSERT INTO field_reports(id,site_id,work_date,author_id,author_name,site_name,site_address,
     units,exterior,interior,notes,status,updated_at,approved_at,planned_units,contract_price,worker_price)
     VALUES('report','site',?,'cleaner@example.invalid','가상 작업자','고객 현장','가상 주소',?,?,0,'비공개 내부 메모',?,?,?,2,50000,20000)`)
-    .bind(today, units, units, status, stamp, status === 'approved' ? stamp : null).run();
+    .bind(today, units, units, status, stamp, status === 'approved' ? new Date().toISOString() : null).run();
   await runner('activate');
   return { DB, env, today, stamp, call, save, runner, claim, ack, seed };
 }
@@ -77,7 +77,7 @@ test('final approved work sends separately to every client exactly once, without
   await h.save(['client1@example.invalid', 'client2@example.invalid']);
   await h.seed('submitted');
   assert.equal(await h.claim(), null);
-  await h.DB.prepare("UPDATE field_reports SET status='approved',approved_at=?,units=1 WHERE id='report'").bind(h.stamp).run();
+  await h.DB.prepare("UPDATE field_reports SET status='approved',approved_at=?,units=1 WHERE id='report'").bind(new Date().toISOString()).run();
   assert.equal(await h.claim(), null);
   await h.call('control/mail?kind=contractor&reference=report', { status: 404 });
   await h.DB.prepare("UPDATE field_reports SET units=2 WHERE id='report'").bind().run();
@@ -106,7 +106,7 @@ test('manual previews bind the whole recipient list and removed queued clients c
   await h.save(['one@example.invalid', 'three@example.invalid']);
   await h.call('control/mail', { method: 'POST', body: { kind: 'contractor', reference: 'report', recipient: first.recipient, previewToken: first.previewToken }, status: 409 });
   const preview = await h.call('control/mail?kind=contractor&reference=report');
-  const request = { kind: 'contractor', reference: 'report', recipient: preview.recipient, previewToken: preview.previewToken };
+  const request = { kind: 'contractor', reference: 'report', recipient: preview.recipient, previewToken: preview.previewToken,allowHistorical:true };
   await h.call('control/mail', { method: 'POST', body: request });
   await h.call('control/mail', { method: 'POST', body: request });
   assert.equal((await h.DB.prepare("SELECT COUNT(*) AS n FROM report_mail WHERE kind='contractor'").first()).n, 2);
@@ -124,7 +124,7 @@ test('twenty client deliveries queue atomically and clearing a site cancels ever
   const recipients = Array.from({ length: 20 }, (_, i) => `client${i}@example.invalid`);
   await h.save(recipients);
   const preview = await h.call('control/mail?kind=contractor&reference=report');
-  const queued = await h.call('control/mail', { method: 'POST', body: { kind: 'contractor', reference: 'report', recipient: preview.recipient, previewToken: preview.previewToken } });
+  const queued = await h.call('control/mail', { method: 'POST', body: { kind: 'contractor', reference: 'report', recipient: preview.recipient, previewToken: preview.previewToken,allowHistorical:true } });
   assert.equal(queued.queuedCount, 20);
   await h.save([]);
   for (let attempt = 0; attempt < 3; attempt++) assert.equal(await h.claim(), null);
@@ -145,7 +145,7 @@ test('provider fallback delivers separately and keeps per-address idempotency', 
     return Response.json({ id: 'receipt-' + delivered.length });
   });
   const preview = await h.call('control/mail?kind=contractor&reference=report');
-  const body = { kind: 'contractor', reference: 'report', recipient: preview.recipient, previewToken:preview.previewToken };
+  const body = { kind: 'contractor', reference: 'report', recipient: preview.recipient, previewToken:preview.previewToken,allowHistorical:true };
   await h.call('control/mail', { method: 'POST', body });
   await h.call('control/mail', { method: 'POST', body });
   assert.deepEqual(delivered.map(mail => mail.to), [['one@example.invalid'], ['two@example.invalid']]);
@@ -169,7 +169,7 @@ test('provider fallback also rejects changed previews and a removed recipient du
     await h.save(['one@example.invalid']);
     return Response.json({id:'receipt-'+sent.length});
   });
-  await h.call('control/mail',{method:'POST',status:409,body:{kind:'contractor',reference:'report',recipient:preview.recipient,previewToken:preview.previewToken}});
+  await h.call('control/mail',{method:'POST',status:409,body:{kind:'contractor',reference:'report',recipient:preview.recipient,previewToken:preview.previewToken,allowHistorical:true}});
   assert.deepEqual(sent,[['one@example.invalid']]);
 });
 
@@ -194,7 +194,7 @@ test('provider fallback resumes twenty recipients without exceeding the D1 Free 
     sent.push(JSON.parse(options.body).to[0]);return Response.json({id:'receipt-'+sent.length});
   });
   const preview=await h.call('control/mail?kind=contractor&reference=report');
-  const body={kind:'contractor',reference:'report',recipient:preview.recipient,previewToken:preview.previewToken};
+  const body={kind:'contractor',reference:'report',recipient:preview.recipient,previewToken:preview.previewToken,allowHistorical:true};
   for (let index=0;index<3;index++) {
     queries=0;
     const result=await h.call('control/mail',{method:'POST',body});

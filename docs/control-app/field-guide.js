@@ -1,5 +1,6 @@
 import { esc } from './ui.js';
 import { focusFieldIssue } from './form-guidance.js';
+import { recoveryMatches, safeRecoveryStep, workRecovery } from './work-recovery.js';
 
 const headings = {
   list: [1,'현장 선택'], site: [1,'현장 정보와 청소 안내'],
@@ -73,6 +74,7 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
   const reread = header.querySelector('[data-guide-action="reread"]');
   const evidence = workflow.form;
   const confirmations = new Map();
+  const recovery=workRecovery(workflow.draft.scope);
   let sites = [];
   let savedEvidence = [];
   let loaded = false;
@@ -83,6 +85,17 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
   let intendedReport = false;
   let backTo;
   let attempt = 0;
+  let restoring=false;
+  let restoreAttempted=false;
+  let resumeAfterGuidance;
+
+  function remember() {
+    if (restoring || resumeAfterGuidance || !site || !['site','setup','before','after','results','saved','report'].includes(step)) return;
+    const proof=workflow.draft.snapshot();
+    const stored=recovery.save({siteId:site.id,assignmentDue:site.nextDue,workDate,step,guidanceVersion:guidance?.version || '',
+      proof:proof.siteId===site.id && proof.workDate===workDate ? proof : null});
+    if (!stored) notify('진행 단계 저장에 실패했습니다. 현재 화면을 유지하고 기기 저장 공간을 확인해 주세요.',true);
+  }
 
   function show(next,{ focus = true } = {}) {
     step = next;
@@ -104,6 +117,7 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
     header.querySelector('[data-guide-context]').textContent=context ? [site.name,date,
       ['before','after','results'].includes(next) ? evidence.dataset.assetLabel || '새 충전기' : ''].filter(Boolean).join(' · ') : '';
     reread.hidden=!context || next==='site';
+    remember();
     if (focus) {
       const title = root.querySelector('[data-guide-screen="home"]:not([hidden]) [data-guide-title]') || header.querySelector('[data-guide-title]');
       title.focus({ preventScroll:true });
@@ -153,6 +167,7 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
   }
 
   async function selectSite(siteId,date=today,resumeReport=false) {
+    if (!restoring) resumeAfterGuidance=undefined;
     const next = sites.find(row=>row.id===siteId);
     if (!next) throw new Error('배정된 현장을 찾을 수 없습니다. 현장 목록을 새로고침해 주세요.');
     const token = ++attempt;
@@ -184,6 +199,56 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
   async function startInspection() {
     await workflow.setEvidenceSite(site.id,workDate);
     show('setup');
+  }
+
+  async function restoreWork() {
+    if (restoreAttempted || !loaded || signal.aborted) return;
+    restoreAttempted=true;
+    const saved=recovery.read() || (()=>{
+      const proof=workflow.draft.resume();
+      return proof ? {...proof,step:'setup',proof} : null;
+    })();
+    if (!saved) return;
+    const target=sites.find(row=>row.id===saved.siteId);
+    if (!recoveryMatches(saved,target,today) || target.currentReportStatus==='submitted') {
+      recovery.clear();
+      return;
+    }
+    restoring=true;
+    working=true;
+    try {
+      await selectSite(saved.siteId,saved.workDate);
+      if (signal.aborted || site?.id!==saved.siteId) return;
+      if (!guidance?.confirmedAt) {
+        resumeAfterGuidance=saved;
+        notify('저장한 현장 입력이 있습니다. 최신 현장 안내를 먼저 확인해 주세요.');
+        return;
+      }
+      await restoreSavedStep(saved,target);
+    } catch (error) {
+      if (!signal.aborted) notify(error.message,true);
+    } finally {
+      restoring=false;
+      working=false;
+      remember();
+    }
+  }
+
+  async function restoreSavedStep(saved,target) {
+    if (!recoveryMatches(saved,target,today) || !guidance?.confirmedAt) return;
+    if (saved.step==='report' || saved.step==='saved') { await openReport();return; }
+    const proof=saved.proof;
+    if (!proof || !recoveryMatches(proof,target,today) || !await workflow.restoreDraft(proof)) {
+      if (signal.aborted) return;
+      await startInspection();
+      notify('저장된 작업 구역을 확인해 주세요. 기존 사진은 촬영 목록에 보관되어 있습니다.');
+      return;
+    }
+    if (saved.guidanceVersion && saved.guidanceVersion!==guidance.version) workflow.resetSafety();
+    const next=safeRecoveryStep(saved.step,{guidance:true,setup:workflow.setupValid(),
+      before:!workflow.camera.missingSlot('Before'),after:!workflow.camera.missingSlot('After')});
+    show(next);
+    notify('자동 저장한 현장·충전기 입력을 복원했습니다. 필요한 확인과 사진이 갖춰진 단계부터 이어갑니다.');
   }
 
   async function openReport() {
@@ -234,7 +299,11 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
           throw error;
         }
       }
-      if (backTo) {
+      if (resumeAfterGuidance) {
+        const saved=resumeAfterGuidance;
+        resumeAfterGuidance=undefined;
+        await restoreSavedStep(saved,site);
+      } else if (backTo) {
         const next=backTo;
         backTo=null;
         drawSite();
@@ -274,6 +343,10 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
       working=false;
     }
   },{ signal });
+  root.addEventListener('input',remember,{signal});
+  root.addEventListener('change',remember,{signal});
+  signal.addEventListener('abort',remember,{once:true});
+  window.addEventListener('pagehide',remember,{signal});
 
   show('home',{ focus:false });
   return {
@@ -284,6 +357,17 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
         sitePriority(a,today).rank-sitePriority(b,today).rank || a.nextDue.localeCompare(b.nextDue) || a.name.localeCompare(b.name,'ko'));
       drawLists();
       const updated = site && sites.find(row=>row.id===site.id);
+      if (site && (!updated || updated.nextDue!==site.nextDue)) {
+        attempt++;
+        guidance=null;
+        resumeAfterGuidance=undefined;
+        recovery.clear();
+        workflow.recheckAssignment();
+        site=updated;
+        show('home');
+        notify('배정 정보가 바뀌었습니다. 기존 입력과 사진은 기기에 보관하고 최신 현장 목록을 표시합니다.');
+        return;
+      }
       if (updated) {
         const changed = updated.delayReason!==site.delayReason || updated.progressUnits!==site.progressUnits
           || updated.currentReportStatus!==site.currentReportStatus;
@@ -311,5 +395,8 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
     reportAllowed(data) { return step==='report' && guidance?.confirmedAt && data.siteId===site?.id && data.workDate===workDate; },
     selectSite,
     home:actions.home,
+    history:actions.history,
+    restore:restoreWork,
+    reportSaved() { recovery.clear();resumeAfterGuidance=undefined;restoreAttempted=true; },
   };
 }

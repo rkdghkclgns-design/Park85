@@ -7,7 +7,7 @@ const eventNames = {
   zone: '구역 추가', capture: '사진 서버 저장', evidence: '증빙 등록', evidence_change: '증빙 수정', evidence_removed: '증빙 삭제',
   evidence_zone_move: '충전기 증빙 구역 이동',
   issue: '후속 조치', payment: '정산 변경', close: '월 마감', task: '처리 담당·기한 변경',
-  mail_queued: '메일 대기', mail_sent: '메일 발송', mail_held: '메일 확인 필요', mail_canceled: '메일 취소',
+  mail_queued: '메일 대기', mail_sent: '메일 발송', mail_held: '메일 확인 필요', mail_canceled: '메일 취소',mail_settings:'메일 수신처·자동발송 설정 변경',
 };
 const option = (value, label, selected = false) => `<option value="${esc(value)}"${selected ? ' selected' : ''}>${esc(label)}</option>`;
 const options = (values, empty) => option('', empty) + Object.entries(values).map(([value, name]) => option(value, name)).join('');

@@ -2,7 +2,7 @@ import { readAppLoginIdentity, usesAppLogin } from './app-login.mjs';
 
 const verificationRoot = '/verification/';
 const verificationWorkerRoot = verificationRoot + 'worker/';
-const verificationTables = /\b(?:work_sites|charger_regions|members|site_reporting|control_settings|field_reports|report_mail|work_plans|charger_evidence|settlement_months|settlement_payments|gmail_report_runner|office_mail_signals|office_mail_progress|work_plan_cycles|work_zones|work_camera_photos|operations_tasks|operations_events|settlement_snapshots|work_progress|work_report_drafts|work_guidance_receipts)\b/g;
+const verificationTables = /\b(?:work_sites|charger_regions|members|site_reporting|client_mail_recipients|control_settings|field_reports|report_mail|work_plans|charger_evidence|settlement_months|settlement_payments|gmail_report_runner|office_mail_signals|office_mail_progress|work_plan_cycles|work_zones|work_camera_photos|operations_tasks|operations_events|settlement_snapshots|work_progress|work_report_drafts|work_guidance_receipts)\b/g;
 const verificationCookie = 'bonyeon_verification';
 const verificationEmail = value => typeof value === 'string' ? value.trim().toLowerCase() : '';
 const verificationToken = () => crypto.randomUUID().replaceAll('-', '');

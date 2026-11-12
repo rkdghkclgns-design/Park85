@@ -457,7 +457,11 @@ function mountUsers(root, account, controller) {
     <form class="user-form" data-member="new">
       <label class="field"><span>이름</span><input name="name" maxlength="80" required></label>
       <label class="field"><span>${verification ? '테스트 작업자 이메일' : native ? '이메일' : 'ChatGPT 이메일'}</span><input name="email" type="email" maxlength="254" required></label>
-      <label class="field"><span>권한</span><select name="role">${roleOptions(account, 'viewer')}</select></label>
+      <p class="small">기본 권한은 청소 작업자입니다. 현장을 배정하면 본인 작업과 지급 내역을 확인하고 완료 보고를 등록할 수 있습니다.</p>
+      <details class="work-details"><summary>고급 권한 선택 · 기본: 청소 작업자</summary>
+        <label class="field"><span>권한</span><select name="role">${roleOptions(account, 'cleaner')}</select></label>
+        <p class="small muted">조회 전용은 현장 작업을 등록할 수 없습니다. 업로드 담당자는 현장 자료를 관리하며, 청소를 진행할 사용자는 청소 작업자로 등록해 주세요.</p>
+      </details>
       <button class="btn primary" type="submit">사용자 등록</button>
     </form>
     <p class="small muted">${verification ? '등록한 테스트 작업자에게 일회용 검증 코드를 발급해 로그인할 수 있습니다.'
@@ -493,7 +497,10 @@ function mountUsers(root, account, controller) {
         return `<form class="member-row user-form" data-member="existing">
           <label class="field"><span>이름</span><input name="name" value="${esc(member.name)}" maxlength="80" required></label>
           <div><span class="small muted">이메일</span><span class="member-email">${esc(member.email)}</span><input type="hidden" name="email" value="${esc(member.email)}"></div>
-          <label class="field"><span>권한</span><select name="role">${roleOptions(account, member.role)}</select></label>
+          <details class="work-details"><summary>권한 변경 · ${esc(roleNames[member.role])}</summary>
+            <label class="field"><span>권한</span><select name="role">${roleOptions(account, member.role)}</select></label>
+            <p class="small muted">청소를 진행하려면 청소 작업자 권한이 필요합니다. 변경하지 않으면 기존 권한을 유지합니다.</p>
+          </details>
           <label class="check"><input type="checkbox" name="active"${member.active ? ' checked' : ''}>활성</label>
           <button class="btn compact" type="submit">저장</button>
           ${native && member.active ? keyButton(member.email) : ''}
@@ -505,6 +512,11 @@ function mountUsers(root, account, controller) {
   }
   const signupReview = root.querySelector('[data-signup-review-panel]');
   if (signupReview) mountSignupReview(signupReview, controller.signal, load);
+  root.addEventListener('change',event=>{
+    if (!event.target.matches('select[name="role"]')) return;
+    const summary=event.target.closest('details')?.querySelector('summary');
+    if (summary) summary.textContent='권한 선택 · '+roleNames[event.target.value];
+  },{signal:controller.signal});
   async function issueKey(email,applicant,button) {
     if (working) return;
     working=true;

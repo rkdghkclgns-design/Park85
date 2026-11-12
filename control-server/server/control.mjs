@@ -1,6 +1,6 @@
 import { buildOfficeAcceptanceMails, buildOfficeMail } from './office-mail.mjs';
 import { validMailbox } from './addresses.mjs';
-import { clientRecipients, clientRecipientsSql, finalClientReportSql, normalizeClientRecipients } from './client-recipients.mjs';
+import { clientRecipients, clientRecipientsSql, finalClientReportSql, legacyClientPolicy, normalizeClientRecipients } from './client-recipients.mjs';
 import { displayWorkResults, normalizeWorkResults } from './work-results.mjs';
 import { internalWorkUnits, readReportDraftList, readWorkerEarnings, saveReportDraft, savePartialWork, workerCanMoveEvidenceZone } from './progress.mjs';
 
@@ -87,7 +87,7 @@ async function readMailSettings(db, env) {
 
 const readAdminRecipient = async (db, env) => (await readMailSettings(db, env)).adminEmail;
 
-async function saveReportSite(db, body, { HttpError, emailAddress }) {
+async function saveReportSite(db, body, { HttpError }, account) {
   const { siteId, region } = body ?? {};
   const emails = normalizeClientRecipients(body?.contractorEmails ?? body?.contractorEmail);
   if (typeof siteId !== 'string' || (region !== null && typeof region !== 'string')
@@ -95,12 +95,12 @@ async function saveReportSite(db, body, { HttpError, emailAddress }) {
     throw new HttpError(400, '현장, 구역과 클라이언트 이메일을 확인해 주세요. 유효한 이메일을 최대 20개 지정할 수 있습니다.');
   }
   const saved = await db.prepare(`
-    INSERT INTO site_reporting (site_id, region_name, contractor_email, contractor_emails)
-    SELECT id, ?, ?, ? FROM work_sites WHERE id = ?
+    INSERT INTO site_reporting (site_id, region_name, contractor_email, contractor_emails,updated_at,history_actor)
+    SELECT id, ?, ?, ?,?,? FROM work_sites WHERE id = ?
       AND (? IS NULL OR EXISTS (SELECT 1 FROM charger_regions WHERE region_name = ?))
     ON CONFLICT(site_id) DO UPDATE SET region_name = excluded.region_name, contractor_email = excluded.contractor_email,
-      contractor_emails = excluded.contractor_emails
-  `).bind(region, emails[0] || '', JSON.stringify(emails), siteId, region, region).run();
+      contractor_emails = excluded.contractor_emails,updated_at=excluded.updated_at,history_actor=excluded.history_actor
+  `).bind(region, emails[0] || '', JSON.stringify(emails),new Date().toISOString(),account.name || account.email, siteId, region, region).run();
   if (!saved.meta.changes) throw new HttpError(404, '선택한 현장 또는 구역을 찾을 수 없습니다.');
 }
 
@@ -570,14 +570,19 @@ async function buildControlMail(db, env, kind, reference, context) {
   if (kind === 'contractor') {
     const row = await db.prepare(`
       SELECT r.id, r.site_id, r.site_name, r.site_address, r.work_date, r.units, r.exterior, r.interior,
-             s.contractor_email,s.contractor_emails
+             s.contractor_email,s.contractor_emails,r.approved_at
       FROM field_reports r LEFT JOIN site_reporting s ON r.site_id = s.site_id
       WHERE r.id = ? AND ${finalClientReportSql('r')}
     `).bind(reference).first();
     if (!row) throw new HttpError(404, '배정 수량 전체가 완료되고 관리자 승인을 마친 현장 보고를 선택해 주세요.');
     const detail = contractorDetails(row, await reportEquipment(db, kind, reference));
+    const { results:policies } = await db.prepare('SELECT email,enabled_at FROM client_mail_recipients WHERE site_id=?').bind(row.site_id).all();
+    const recipientPolicies=Object.fromEntries(policies.map(policy=>[policy.email,policy.enabled_at]));
+    const recipients=clientRecipients(row);
+    const historicalRecipients=recipients.filter(email=>row.approved_at<(recipientPolicies[email] || legacyClientPolicy));
     return {
-      recipient: clientRecipients(row)[0] || '', recipients: clientRecipients(row),
+      recipient: recipients[0] || '',recipients,recipientPolicies,historicalRecipients,requiresHistoricalConsent:historicalRecipients.length>0,
+      workDate:row.work_date,warnings:historicalRecipients.length ? ['수신처 등록 이전에 승인된 작업입니다. 과거 보고 발송 대상을 확인해 주세요.'] : [],
       subject: `[본연] ${row.site_name} 충전기 청소 결과 · ${row.work_date}`,
       text: ['안녕하세요. 본연입니다.', '', ...fieldReportLines(row, false), '', detail.detailText].join('\n'),
       html: detail.html,
@@ -689,7 +694,8 @@ async function dispatchControlMail(db, env, kind, reference, message, { HttpErro
     const { results:delivered } = await db.prepare("SELECT recipient FROM report_mail WHERE kind='contractor' AND reference=? AND sent_at IS NOT NULL")
       .bind(reference).all();
     const sent = new Set(delivered.map(row=>row.recipient));
-    const remaining = message.recipients.filter(recipient=>!sent.has(recipient));
+    const remaining = message.recipients.filter(recipient=>!sent.has(recipient)
+      && (message.allowHistorical || !message.historicalRecipients?.includes(recipient)));
     const batch = remaining.slice(0,recipientBatchLimit);
     const results = [];
     for (const recipient of batch) results.push(await dispatchControlMail(db,env,kind,reference,
@@ -704,16 +710,21 @@ async function dispatchControlMail(db, env, kind, reference, message, { HttpErro
   const now = new Date();
   const nowText = now.toISOString();
   await db.prepare(`
-    INSERT INTO report_mail (id, kind, reference, recipient, sender, subject, body, html, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING
-  `).bind(deliveryId, kind, reference, message.recipient, env.BONYEON_REPORT_FROM, message.subject, message.text, message.html, nowText).run();
+    INSERT INTO report_mail (id, kind, reference, recipient, sender, subject, body, html, created_at,recipient_policy_at,historical_consent_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,?,?) ON CONFLICT(id) DO UPDATE SET
+      sender=excluded.sender,subject=excluded.subject,body=excluded.body,html=excluded.html,created_at=excluded.created_at,
+      recipient_policy_at=excluded.recipient_policy_at,historical_consent_at=excluded.historical_consent_at
+    WHERE excluded.kind='contractor' AND report_mail.sent_at IS NULL AND report_mail.provider_id IS NULL AND report_mail.lease_until IS NULL
+  `).bind(deliveryId, kind, reference, message.recipient, env.BONYEON_REPORT_FROM, message.subject, message.text, message.html, nowText,
+    message.recipientPolicies?.[message.recipient] || null,message.allowHistorical ? nowText : null).run();
   const stored = await db.prepare('SELECT * FROM report_mail WHERE id = ?').bind(deliveryId).first();
   if (stored.sent_at) return { sent: true, alreadySent: true, sentAt: stored.sent_at };
   if (+now - Date.parse(stored.created_at) >= 23 * 3600_000) {
     throw new HttpError(409, '이전 발송 결과를 메일 서비스에서 확인해 주세요. 중복 발송을 방지하기 위해 재시도를 중단했습니다.');
   }
   const until = new Date(+now + 45_000).toISOString();
-  const target = kind==='contractor' ? queuedMailRoute({kind,reference,recipient:message.recipient},env) : null;
+  const target = kind==='contractor' ? queuedMailRoute({kind,reference,recipient:message.recipient,
+    recipient_policy_at:stored.recipient_policy_at,historical_consent_at:stored.historical_consent_at},env) : null;
   const claim = await db.prepare(`
     UPDATE report_mail SET lease_until = ?
     WHERE id = ? AND sent_at IS NULL AND (lease_until IS NULL OR lease_until <= ?)
@@ -780,6 +791,7 @@ async function runScheduledReports(request, env, context) {
     SELECT r.id FROM field_reports r JOIN site_reporting s ON s.site_id = r.site_id
     WHERE ${finalClientReportSql('r')} AND r.approved_at >= ? AND s.contractor_email <> ''
       AND EXISTS (SELECT 1 FROM json_each(${clientRecipientsSql('s')}) c WHERE c.value<>''
+        AND EXISTS(SELECT 1 FROM client_mail_recipients p WHERE p.site_id=r.site_id AND p.email=c.value AND r.approved_at>=p.enabled_at)
         AND NOT EXISTS (SELECT 1 FROM report_mail m WHERE m.kind='contractor' AND m.reference=r.id AND m.recipient=c.value AND m.sent_at IS NOT NULL))
     ORDER BY r.approved_at, r.id LIMIT 10
   `).bind(start).all();
@@ -804,7 +816,7 @@ async function runScheduledReports(request, env, context) {
 
 async function mailPreviewToken(kind, reference, message, signalId) {
   const parts = [kind, reference, message.recipient, message.subject, message.text, message.html];
-  if (kind === 'contractor') parts.push(message.recipients || [message.recipient]);
+  if (kind === 'contractor') parts.push(message.recipients || [message.recipient],message.recipientPolicies || {});
   if (signalId !== undefined) parts.push(signalId);
   const bytes = new TextEncoder().encode(JSON.stringify(parts));
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
@@ -1068,14 +1080,15 @@ async function queueGmailMail(db, env, account, kind, reference, message, key, {
     const recipients = message.recipients || [message.recipient];
     const stamp = new Date().toISOString();
     const result = await db.prepare(`
-      INSERT INTO report_mail(id,kind,reference,recipient,sender,subject,body,html,created_at,requested_by)
-      SELECT 'gmail:manual:' || lower(hex(randomblob(16))),'contractor',?,c.value,?,?,?,?,?,?
+      INSERT INTO report_mail(id,kind,reference,recipient,sender,subject,body,html,created_at,requested_by,recipient_policy_at,historical_consent_at)
+      SELECT 'gmail:manual:' || lower(hex(randomblob(16))),'contractor',?,c.value,?,?,?,?,?,?,
+        (SELECT enabled_at FROM client_mail_recipients WHERE site_id=(SELECT site_id FROM field_reports WHERE id=?) AND email=c.value),?
       FROM json_each(?) c
       WHERE ?=(SELECT ${clientRecipientsSql('s')} FROM site_reporting s JOIN field_reports r ON r.site_id=s.site_id
         WHERE r.id=? AND ${finalClientReportSql('r')})
         AND NOT EXISTS (SELECT 1 FROM report_mail m WHERE m.kind='contractor' AND m.reference=? AND m.recipient=c.value
           AND m.canceled_at IS NULL AND (m.sent_at IS NOT NULL OR m.provider_id LIKE 'gmail:%' OR m.requested_by IS NOT NULL))
-    `).bind(reference,env.BONYEON_GMAIL_FROM,message.subject,stored.text,stored.html,stamp,account.id,
+    `).bind(reference,env.BONYEON_GMAIL_FROM,message.subject,stored.text,stored.html,stamp,account.id,reference,message.allowHistorical ? stamp : null,
       JSON.stringify(recipients),JSON.stringify(recipients),reference,reference).run();
     const previous = await db.prepare(`SELECT COUNT(*) AS total,SUM(sent_at IS NOT NULL) AS sent
       FROM report_mail WHERE kind='contractor' AND reference=? AND canceled_at IS NULL
@@ -1118,9 +1131,10 @@ function queuedMailRoute(job, env) {
   if (job.kind === 'consultation') return { sql:'SELECT ?',args:[env.BONYEON_CONSULTATION_EMAIL || env.BONYEON_GMAIL_FROM] };
   if (job.kind === 'tax') return { sql: 'SELECT tax_email FROM control_settings WHERE id = 1', args: [] };
   if (job.kind === 'contractor') {
-    return { sql: `SELECT c.value FROM field_reports r JOIN site_reporting s ON s.site_id = r.site_id,
-                     json_each(${clientRecipientsSql('s')}) c
-                   WHERE r.id = ? AND ${finalClientReportSql('r')} AND c.value=?`, args: [job.reference,job.recipient] };
+    return { sql: `SELECT c.email AS value FROM field_reports r JOIN client_mail_recipients c ON c.site_id=r.site_id
+                   WHERE r.id=? AND ${finalClientReportSql('r')} AND c.email=? AND c.enabled_at=COALESCE(?,?)
+                     AND (r.approved_at>=c.enabled_at OR ? IS NOT NULL)`,
+      args:[job.reference,job.recipient,job.recipient_policy_at || null,legacyClientPolicy,job.historical_consent_at || null] };
   }
   return { sql: 'SELECT COALESCE((SELECT admin_email FROM control_settings WHERE id = 1), ?)', args: [env.BONYEON_OWNER_EMAIL || ''] };
 }
@@ -1176,7 +1190,7 @@ function gmailClaimBudget(db) {
 async function claimQueuedGmailReport(db, env, now, requestId, budget, consultation = false) {
   if (!budget.has(3)) return null;
   const { results: jobs } = await db.prepare(`
-    SELECT id, kind, reference, recipient, subject, body, html, payload_key, test_day FROM report_mail
+    SELECT id, kind, reference, recipient, subject, body, html, payload_key, test_day,recipient_policy_at,historical_consent_at FROM report_mail
     WHERE requested_by IS NOT NULL AND sent_at IS NULL AND canceled_at IS NULL AND provider_id IS NULL
       AND (kind = 'consultation') = ?
     ORDER BY created_at, id LIMIT 8
@@ -1367,9 +1381,8 @@ async function claimGmailReport(env, context, now, requestId) {
       UNION ALL
       SELECT 'settlement', month, 2, closed_at, NULL FROM settlement_months WHERE closed_at >= ? AND month < ?
       UNION ALL
-      SELECT 'contractor', r.id, 3, r.approved_at, c.value FROM field_reports r JOIN site_reporting s ON s.site_id = r.site_id,
-        json_each(${clientRecipientsSql('s')}) c
-        WHERE ${finalClientReportSql('r')} AND r.approved_at >= ? AND c.value <> ''
+      SELECT 'contractor', r.id, 3, r.approved_at, c.email FROM field_reports r JOIN client_mail_recipients c ON c.site_id=r.site_id
+        WHERE ${finalClientReportSql('r')} AND r.approved_at >= ? AND r.approved_at>=c.enabled_at
       UNION ALL
       SELECT 'completion', id, 0, completion_reported_at, NULL FROM field_reports WHERE completion_reported_at >= ?
     )
@@ -1391,10 +1404,11 @@ async function claimGmailReport(env, context, now, requestId) {
     const payloadKey = packed ? null : await mailPreviewToken(kind,reference,message);
     const id = 'gmail:' + kind + ':' + reference + ':' + crypto.randomUUID();
     const claim = crypto.randomUUID();
-    const target = queuedMailRoute({ kind, reference, recipient:message.recipient }, env);
+    const policyAt=kind==='contractor' ? message.recipientPolicies[message.recipient] : null;
+    const target = queuedMailRoute({ kind, reference, recipient:message.recipient,recipient_policy_at:policyAt }, env);
     const result = await db.prepare(`
-      INSERT INTO report_mail (id, kind, reference, recipient, sender, subject, body, html, created_at, provider_id, claim_request_id, hold_at, payload_key)
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      INSERT INTO report_mail (id, kind, reference, recipient, sender, subject, body, html, created_at, provider_id, claim_request_id, hold_at, payload_key,recipient_policy_at)
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?
       WHERE NOT EXISTS (
         SELECT 1 FROM report_mail WHERE kind = ? AND reference = ? AND canceled_at IS NULL
           AND (?<>'contractor' OR recipient=?)
@@ -1403,7 +1417,7 @@ async function claimGmailReport(env, context, now, requestId) {
       ON CONFLICT(id) DO NOTHING
     `).bind(id, kind, reference, message.recipient, env.BONYEON_GMAIL_FROM,
       message.subject, packed?.text ?? heldReportText, packed?.html ?? '', now.toISOString(), 'gmail:' + claim,
-      packed ? requestId : null, heldAt, payloadKey, kind, reference,kind,message.recipient,
+      packed ? requestId : null, heldAt, payloadKey,policyAt, kind, reference,kind,message.recipient,
       message.recipient, ...target.args, requestId, requestId).run();
     if (result.meta.changes && packed) return { id,claim,to:message.recipient,subject:message.subject,
       ...packedGmailBody(kind,null,packed,message.text,message.html,env) };
@@ -1472,11 +1486,11 @@ async function retryStorageHeldReport(env, context, now, requestId, budget) {
   if (!cleared.meta.changes) return null;
   const id = 'gmail:recovered:' + crypto.randomUUID();
   const claim = crypto.randomUUID();
-  const target = queuedMailRoute({ kind:old.kind,reference:old.reference,recipient:payload.recipient },env);
+  const target = queuedMailRoute({ ...old,recipient:payload.recipient },env);
   const inserted = await db.prepare(`
     INSERT INTO report_mail(id,kind,reference,recipient,sender,subject,body,html,created_at,provider_id,
-      claim_request_id,payload_key,office_base_key,office_signal_id)
-    SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?
+      claim_request_id,payload_key,office_base_key,office_signal_id,recipient_policy_at,historical_consent_at)
+    SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
     WHERE ?=(${target.sql}) AND ${availableGmailRequest}
       AND NOT EXISTS (SELECT 1 FROM report_mail m WHERE m.kind=? AND m.reference=? AND m.canceled_at IS NULL
         AND (?<>'contractor' OR m.recipient=?)
@@ -1485,7 +1499,7 @@ async function retryStorageHeldReport(env, context, now, requestId, budget) {
         WHERE s.kind=? AND s.reference=? AND (${activeOfficeSignals})))
     ON CONFLICT DO NOTHING
   `).bind(id,old.kind,old.reference,payload.recipient,env.BONYEON_GMAIL_FROM,payload.subject,packed.text,packed.html,now.toISOString(),
-    'gmail:'+claim,requestId,key,baseKey,signalId,payload.recipient,...target.args,requestId,requestId,
+    'gmail:'+claim,requestId,key,baseKey,signalId,old.recipient_policy_at,old.historical_consent_at,payload.recipient,...target.args,requestId,requestId,
     old.kind,old.reference,old.kind,payload.recipient,signalId,signalId,old.kind,old.reference).run();
   if (!inserted.meta.changes) return null;
   return { id,claim,to:payload.recipient,subject:payload.subject,
@@ -1495,7 +1509,7 @@ async function retryStorageHeldReport(env, context, now, requestId, budget) {
 async function readGmailClaimForRequest(env, requestId) {
   if (!requestId) return undefined;
   const job = await env.DB.prepare(`
-    SELECT id, kind, reference, recipient, subject, body, html, payload_key, provider_id, sent_at, hold_at, canceled_at, test_day, office_signal_id
+    SELECT id, kind, reference, recipient, subject, body, html, payload_key, provider_id, sent_at, hold_at, canceled_at, test_day, office_signal_id,recipient_policy_at,historical_consent_at
     FROM report_mail WHERE claim_request_id = ?
   `).bind(requestId).first();
   if (!job) return undefined;
@@ -1637,7 +1651,7 @@ export async function handleControl(path, request, env, account, context) {
     return json({ ok: true });
   }
   if (path === '/api/control/site' && request.method === 'PATCH') {
-    await saveReportSite(db, await readJson(request, env), context);
+    await saveReportSite(db, await readJson(request, env), context,account);
     return json({ ok: true });
   }
   if (path === '/api/control/settings' && request.method === 'PATCH') {
@@ -1657,13 +1671,13 @@ export async function handleControl(path, request, env, account, context) {
       throw new HttpError(400, '자동 발송 설정을 확인해 주세요.');
     }
     await db.prepare(`
-      INSERT INTO control_settings (id, admin_email, tax_email, worker_mail_enabled, office_auto_enabled)
-      VALUES (1, ?, COALESCE(?, ''), COALESCE(?, 0), COALESCE(?, 0))
+      INSERT INTO control_settings (id, admin_email, tax_email, worker_mail_enabled, office_auto_enabled,updated_at,history_actor)
+      VALUES (1, ?, COALESCE(?, ''), COALESCE(?, 0), COALESCE(?, 0),?,?)
       ON CONFLICT(id) DO UPDATE SET admin_email = excluded.admin_email,
         tax_email = COALESCE(?, control_settings.tax_email),
         worker_mail_enabled = COALESCE(?, control_settings.worker_mail_enabled),
-        office_auto_enabled = COALESCE(?, control_settings.office_auto_enabled)
-    `).bind(email, taxEmail, workerEnabled, autoEnabled, taxEmail, workerEnabled, autoEnabled).run();
+        office_auto_enabled = COALESCE(?, control_settings.office_auto_enabled),updated_at=excluded.updated_at,history_actor=excluded.history_actor
+    `).bind(email, taxEmail, workerEnabled, autoEnabled,new Date().toISOString(),account.name || account.email, taxEmail, workerEnabled, autoEnabled).run();
     return json({ ok: true });
   }
   if (path === '/api/control/mail' && request.method === 'GET') {
@@ -1689,6 +1703,10 @@ export async function handleControl(path, request, env, account, context) {
     if (mail.recipient !== recipient || ((gmailConfigured(env) || kind==='contractor') && previewToken !== key)) {
       throw new HttpError(409, '수신 주소 또는 보고 내용이 바뀌었습니다. 미리보기를 다시 확인해 주세요.');
     }
+    if (kind==='contractor' && mail.requiresHistoricalConsent && body.allowHistorical!==true) {
+      throw new HttpError(409,'이 수신처가 등록되기 전에 승인된 보고입니다. 과거 보고 발송 대상과 작업일을 확인하고 동의해 주세요.');
+    }
+    if (kind==='contractor') mail.allowHistorical=body.allowHistorical===true;
     if (gmailConfigured(env)) return json(await queueGmailMail(db, env, account, kind, reference, identifyOfficeSnapshot(kind, mail, key, env), key, context));
     if (officeMailKinds.has(kind)) throw new HttpError(503, '본연 Gmail 자동 발송을 연결해 주세요.');
     return json(await dispatchControlMail(db, env, kind, reference, mail, context));

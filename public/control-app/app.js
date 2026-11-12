@@ -7,13 +7,13 @@ import { mountOperations, operationsAuth, operationsPage, operationsSession, rol
 import { renderSignup } from './signup.js';
 import { installFormGuidance } from './form-guidance.js';
 import { readPhotoQueue } from './photo-queue.js';
+import { browserWorkspaceExport, isLegacyRoute, navigationItems, resolveNavigationRoute } from './navigation.js';
 
 const app = document.querySelector('#app');
 const notice = document.querySelector('#notice');
 const dialog = document.querySelector('#dialog');
 installFormGuidance();
 installPrivateMedia(app,notify);
-const tabs = [['home', '홈', '홈'], ['map', '지도', '현장 작업 지도'], ['control', '관제', '현장 보고·관제'], ['analytics', '분석', '운영 분석'], ['regions', '구역', '구역별 충전기'], ['days', '일자별', '일자별 보고'], ['month', '월간', '월간 보고'], ['alerts', '보완 요청', '보완 요청'], ['users', '사용자', '사용자 관리'], ['about', '소개', '본연 소개']];
 const verification = location.pathname.startsWith('/verification/');
 const verificationWorker = location.pathname.startsWith('/verification/worker/');
 const sessionKey = verification ? 'cleanreport-verification-user' : 'cleanreport-user';
@@ -60,21 +60,39 @@ function showDialog(title, body) {
 }
 
 function getRoute() {
-  const hash = location.hash.slice(1);
-  const mail = new URLSearchParams(location.search).get('mail');
-  if (!hash && /^[a-f0-9]{64}$/.test(mail || '')) return 'control-detail/mail/' + mail;
-  const controlDetail = /^control-detail\/(site|worker|report|mail|archive)\/[^/?]+(?:\?month=\d{4}-\d{2})?$/.test(hash);
-  if (controlDetail) return hash;
-  if (!hash && account.nativeLogin && ['cleaner','admin','owner'].includes(account.role)) return 'control';
-  if (verification && !['control', 'map', 'regions', 'users', 'analytics'].includes(hash)) return 'control';
-  if (account.role === 'cleaner' && !['control', 'map', 'regions', 'about'].includes(hash)) return 'control';
-  if (tabs.some(([route]) => route === hash)) return hash;
-  const date = hash.slice(2);
-  if (/^d-\d{4}-\d{2}-\d{2}$/.test(hash)) {
-    const parsed = new Date(date + 'T00:00:00Z');
-    if (Number.isFinite(+parsed) && parsed.toISOString().slice(0, 10) === date) return hash;
-  }
-  return 'home';
+  return resolveNavigationRoute(location.hash.slice(1),account,{ independentPortal,verification,
+    mail:new URLSearchParams(location.search).get('mail') || '' });
+}
+
+function legacyNotice() {
+  const operationalRoute=['owner','admin','cleaner'].includes(account.role) ? '#control' : '#map';
+  return `<aside class="card ops-upload stack" aria-label="기존 브라우저 자료 안내">
+    <strong>기존 브라우저 보관 자료</strong>
+    <p>이 자료는 이 브라우저에 저장되어 있습니다. 운영 관제의 현장·승인·정산과 구분되며 자동 메일로 발송되지 않습니다. 기존 보고서와 사진은 그대로 보관됩니다.</p>
+    <div class="row"><a class="btn primary compact" href="${operationalRoute}">운영 화면으로 이동</a>
+      <a class="btn compact" href="#legacy">기존 자료 목록</a><button class="btn compact" type="button" data-action="export-browser-data">저장된 원본·사진 내보내기</button></div>
+  </aside>`;
+}
+
+function renderLegacyArchive() {
+  return `<header class="page-title"><h1>기존 브라우저 자료</h1><p>저장된 보고서 ${Object.keys(workspace.reports).length}건 · 월간 자료 ${Object.keys(workspace.months).length}개월</p></header>
+    <section class="card ops-upload stack"><h2>보관 자료 열기</h2><div class="row">
+      <a class="btn" href="#home">기존 요약</a><a class="btn" href="#days">기존 일자별 보고</a>
+      <a class="btn" href="#month">기존 월간 보고</a><a class="btn" href="#alerts">기존 보완 요청</a></div>
+    <p class="small muted">원본 JSON 파일에는 저장된 보고 내용과 첨부 사진이 함께 들어갑니다. 이관 전에 파일을 안전하게 보관해 주세요.</p></section>`;
+}
+
+function renderMore() {
+  const manager=['owner','admin'].includes(account.role);
+  return `<header class="page-title"><h1>도움말·더보기</h1><p>현장 작업 외의 참고 자료와 보관 자료입니다.</p></header>
+    <section class="card ops-upload stack"><h2>참고 자료</h2><div class="row">
+      <a class="btn" href="#regions">${manager ? '공식 충전기 집계·청소단가 관리' : account.role==='cleaner' ? '충전기 집계·내 배정 단가' : '공식 충전기 공개 집계'}</a>
+      <a class="btn" href="#about">본연 소개·문의</a></div></section>
+    ${independentPortal && !verification && manager ? `<details class="card ops-upload"><summary><strong>기존 브라우저 자료</strong></summary>
+      <div class="stack region-refresh"><p>예전에 이 브라우저에 저장한 보고서와 사진을 확인하고 내보낼 수 있습니다. 운영 관제의 보고·정산 화면은 ‘현장 보고·관제’에서 확인합니다.</p>
+      <div class="row"><a class="btn" href="#legacy">기존 자료 열기</a><button class="btn" type="button" data-action="export-browser-data">저장된 원본·사진 내보내기</button></div></div></details>` : ''}
+    ${account.role==='owner' && !verification ? `<details class="card ops-upload"><summary><strong>시스템 진단</strong></summary>
+      <div class="stack region-refresh"><p>검증 작업공간은 실제 운영 장부와 분리됩니다.</p><div><a class="btn" href="/verification/#control">검증 작업공간 열기</a></div></div></details>` : ''}`;
 }
 
 function renderConnectionRecovery() {
@@ -255,32 +273,30 @@ function render({ keepScroll = false } = {}) {
   }
   activeRoute = route;
   const controlDetail = route.startsWith('control-detail/');
-  const navKey = route.startsWith('d-') ? 'days' : controlDetail ? 'control' : route;
+  const ownPayment=account.role==='cleaner' && route.startsWith('control-detail/worker/'+encodeURIComponent(account.id)+'?');
+  const navKey = independentPortal && isLegacyRoute(route) ? 'more' : location.hash==='#history' && account.role==='cleaner' ? 'history' : ownPayment ? 'payments'
+    : route.startsWith('d-') ? 'days' : controlDetail ? 'control' : route;
   let body;
   if (route === 'home') body = renderHome();
   if (route === 'days') body = renderDays();
   if (route === 'month') body = monthlyReport(workspace, month, monthPicker(), monthEditor);
   if (route === 'alerts') body = renderAlerts();
+  if (route === 'legacy') body = renderLegacyArchive();
+  if (route === 'more') body = renderMore();
   if (controlDetail || ['map', 'control', 'analytics', 'regions', 'users', 'about'].includes(route)) body = operationsPage(route, account);
   if (route.startsWith('d-')) body = renderReport(route.slice(2));
+  if (independentPortal && !verification && isLegacyRoute(route)) body=legacyNotice()+body;
   const scroll = keepScroll ? window.scrollY : 0;
   const role = roleNames[account.role] ?? '보고서';
-  const visibleTabs = tabs.filter(([key]) => {
-    if (verification && !['control', 'map', 'regions', 'users', 'analytics'].includes(key)) return false;
-    if (account.role === 'cleaner') return ['control', 'map', 'regions', 'about'].includes(key);
-    if (key === 'users' || key === 'analytics') return ['owner', 'admin'].includes(account.role);
-    if (key === 'control') return ['owner', 'admin', 'cleaner'].includes(account.role);
-    return true;
-  });
-  const menu = compact => visibleTabs.map(([key, shortLabel, longLabel]) =>
-    `<a href="#${key}"${key === navKey ? ' aria-current="page"' : ''}>${icon(key)}<span>${key === 'control' && account.role === 'cleaner' ? '내 작업' : compact ? shortLabel : longLabel}</span></a>`).join('');
-  const verificationLink = !verification && account.role === 'owner' ? '<a href="/verification/#control">검증 작업공간</a>' : '';
+  const visibleTabs = navigationItems(account,{ independentPortal,verification,month:today().slice(0,7) });
+  const menu = compact => visibleTabs.map(({key,shortLabel,label,href,icon:iconName})=>
+    `<a href="${esc(href)}"${key===navKey ? ' aria-current="page"' : ''}>${icon(iconName)}<span>${esc(compact ? shortLabel : label)}</span></a>`).join('');
   const switchButton = account.canSwitchMode ? `<button class="link-button" type="button" data-action="toggle-work-mode">${account.role === 'cleaner' ? '관리자 모드로 전환' : '청소 진행자 모드로 전환'}</button>` : '';
   const accountButton = switchButton + (verificationWorker ? '<button class="link-button" type="button" data-action="verification-logout">테스트 작업자 로그아웃</button>'
     : verification ? '' : account.nativeLogin ? '<button class="link-button" type="button" data-action="native-logout">로그아웃</button>'
       : '<button class="link-button" type="button" data-action="logout">보고서 계정 전환</button>');
   app.innerHTML = `<div class="workspace">
-    <aside class="sidebar">${brand('본연', '현장 작업 관리')}<nav class="side-menu" aria-label="주 메뉴">${menu(false)}${verificationLink}</nav>
+    <aside class="sidebar">${brand('본연', '현장 작업 관리')}<nav class="side-menu" aria-label="주 메뉴">${menu(false)}</nav>
       <div class="sidebar-user"><strong>${role}</strong><p class="muted">${esc(account.name || '본연')}</p>${accountButton}</div>
     </aside>
     <header class="topbar"><div class="shell">${brand('본연', role)}${accountButton}</div></header>
@@ -463,6 +479,16 @@ const actions = {
     location.reload();
   },
   'verification-logout': async () => { await verificationRequest('logout', {}); location.reload(); },
+  'export-browser-data': () => {
+    const payload=browserWorkspaceExport(workspace,{workspaceKey:user,exportedAt:new Date().toISOString()});
+    const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'}));
+    const link=document.createElement('a');
+    link.href=url;
+    link.download='본연-기존브라우저자료-'+today()+'.json';
+    link.click();
+    setTimeout(()=>URL.revokeObjectURL(url),60_000);
+    notify('저장된 기존 보고서와 사진을 원본 파일로 내보냈습니다.');
+  },
   refresh: async () => { workspace = await getWorkspace(user); render(); notify('새로고침했습니다.'); },
   'new-report': () => {
     const field = document.querySelector('#newdate');
@@ -498,6 +524,12 @@ const actions = {
 };
 
 app.addEventListener('click', async event => {
+  const historyLink=event.target.closest('a[href="#history"]');
+  if (historyLink && location.hash==='#history' && account.role==='cleaner' && !event.defaultPrevented) {
+    event.preventDefault();
+    render();
+    return;
+  }
   const button = event.target.closest('button[data-action]');
   if (!button || saving) return;
   try {
