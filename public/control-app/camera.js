@@ -22,6 +22,7 @@ export function cameraFields(guided = false) {
       </section>`).join('')}
     </div></div>`).join('')}
     <dialog class="dialog" data-camera-dialog>
+      <div class="camera-toast" data-camera-toast role="status" aria-live="polite" aria-atomic="true" hidden></div>
       <div class="stack"><h3 data-camera-title></h3><video autoplay muted playsinline></video>
         <p class="small" role="status" data-camera-status></p>
         <div class="row"><button class="btn primary" type="button" data-camera-snap>촬영하고 바로 등록</button>
@@ -64,6 +65,7 @@ export function mountCamera(evidence, api, signal, notify, onModeChange, userId,
   const camera = evidence.querySelector('[data-camera-fields]');
   const video = dialog.querySelector('video');
   const status = dialog.querySelector('[data-camera-status]');
+  const toast = dialog.querySelector('[data-camera-toast]');
   const zone = evidence.elements.zoneId;
   const zoneName = evidence.querySelector('[data-zone-name]');
   const renameZoneButton = evidence.querySelector('[data-rename-zone]');
@@ -74,6 +76,7 @@ export function mountCamera(evidence, api, signal, notify, onModeChange, userId,
   const fileMode = evidence.querySelector('[data-verification-file]');
   const legacy = evidence.querySelector('[data-verification-photos]');
   let stream;
+  let toastTimer;
   let opening = 0;
   let current;
   let drafts = [];
@@ -92,6 +95,8 @@ export function mountCamera(evidence, api, signal, notify, onModeChange, userId,
   const draftKey = ({ siteId, workDate, assetCode, zoneId }) => JSON.stringify([siteId, workDate, assetCode.trim().normalize('NFKC').toUpperCase(), zoneId]);
   const usesFiles = () => Boolean(fileMode?.checked);
   const stop = () => {
+    window.clearTimeout(toastTimer);
+    toast.hidden = true;
     opening++;
     current = null;
     stream?.getTracks().forEach(track => track.stop());
@@ -409,6 +414,9 @@ export function mountCamera(evidence, api, signal, notify, onModeChange, userId,
       }
       if (button.hasAttribute('data-camera-snap') && current) {
         button.disabled = true;
+        window.clearTimeout(toastTimer);
+        toast.hidden = true;
+        const captureOpening = opening;
         try {
           const { fields, slot } = current;
           const key = draftKey(fields);
@@ -418,6 +426,12 @@ export function mountCamera(evidence, api, signal, notify, onModeChange, userId,
           if (blob.size > 1_200_000) throw new Error('사진이 너무 큽니다. 다시 촬영해 주세요.');
           await writeQueuedPhoto({ id: crypto.randomUUID(), owner, fields, slot, blob, time: Date.now(), assetLabel:evidence.dataset.assetLabel,
             siteName: evidence.elements.siteId.selectedOptions[0]?.textContent || '', zoneName: zone.value ? zone.selectedOptions[0].textContent : '' });
+          if (!signal.aborted && dialog.open && opening === captureOpening) {
+            window.clearTimeout(toastTimer);
+            toast.textContent = '촬영 완료 · 기기에 저장했습니다. (' + (count + 1) + '장)';
+            toast.hidden = false;
+            toastTimer = window.setTimeout(() => { toast.hidden = true; }, 4000);
+          }
           if (draftKey(fields)===draftKey(context())) {
             try { draft.save({automatic:true}); } catch (error) { notify(error.message,true); }
           }
