@@ -1,0 +1,29 @@
+{
+  "name": "bonyeon-control",
+  "main": "server/independent-worker.mjs",
+  "compatibility_date": "2026-11-12",
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    "BONYEON_FRONTEND_ORIGIN": "https://bonyeonclean.com",
+    "BONYEON_APP_LOGIN_REQUIRED": "1",
+    "BONYEON_GMAIL_FROM": "bonyeon85@gmail.com",
+    "BONYEON_PORTAL_LINKS": "1",
+    "BONYEON_REPORT_START_DATE": "2026-11-11"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "bonyeon-control-db",
+      "database_id": "1073a6ab-6be8-4e5f-b4a6-e0f69c656830"
+    },
+    {
+      "binding": "MEDIA_DB",
+      "database_name": "bonyeon-control-media",
+      "database_id": "e9b6cec1-423f-420a-9fdc-9503610a3fec"
+    }
+  ],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ]
+}

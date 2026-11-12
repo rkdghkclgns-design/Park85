@@ -1,0 +1,2 @@
+ALTER TABLE settlement_payments ADD COLUMN payment_version INTEGER NOT NULL DEFAULT 1
+  CHECK (payment_version BETWEEN 1 AND 9007199254740991);
