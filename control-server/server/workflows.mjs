@@ -56,7 +56,7 @@ async function readWorkflows(db, month, account, admin, ownerEmail) {
            COALESCE('충전기 ' || e.device_number,e.asset_code) AS assetLabel,
            e.author_name AS authorName, e.exterior, e.interior, e.safety_checked AS safetyChecked,
            e.charger_type AS chargerType, e.canopy, e.result_detail,e.safety_checklist AS safetyChecklist,
-           e.zone_id AS zoneId,z.name AS zoneName,(${openEvidencePeriod} AND (? OR (${workerCanMoveEvidenceZone}))) AS canMoveZone,
+           e.zone_id AS zoneId,e.zone_name_snapshot AS zoneName,(${openEvidencePeriod} AND (? OR (${workerCanMoveEvidenceZone}))) AS canMoveZone,
            (SELECT json_group_array(json_object('id', p.id, 'slot', p.slot)) FROM (
              SELECT id, slot FROM work_camera_photos WHERE evidence_id = e.id ORDER BY created_at, id
            ) p) AS capturedPhotos,
@@ -199,7 +199,7 @@ async function saveWorkEvidence(request, env, account, admin, context) {
   const usesCamera = !env.BONYEON_VERIFICATION_MODE || form.has('captureIds');
   const captured = usesCamera ? await readCaptureSelection(db, form.get('captureIds'), [siteId, workDate, assetCode, zoneId, account.id], activeSlots, HttpError) : [];
   const photos = [];
-  if (!usesCamera) for (const slot of activeSlots) photos.push([slot, await validateProofJpeg(form.get(slot), HttpError)]);
+  if (!usesCamera) for (const slot of activeSlots) photos.push([slot, await validateProofJpeg(form.get(slot), HttpError, env.JPEG_VALIDATE)]);
   const captureJson = JSON.stringify(captured);
   const id = crypto.randomUUID();
   try {
@@ -213,14 +213,18 @@ async function saveWorkEvidence(request, env, account, admin, context) {
         CASE WHEN ? LIKE 'AUTO-%' THEN COALESCE(
           (SELECT device_number FROM charger_evidence WHERE site_id=w.id AND asset_code=? AND device_number IS NOT NULL LIMIT 1),
           (SELECT COALESCE(MAX(device_number),0)+1 FROM charger_evidence WHERE site_id=w.id)) END,?,?
-      FROM work_sites w WHERE w.id = ?
+      FROM work_sites w LEFT JOIN work_progress g ON g.site_id=w.id
+      LEFT JOIN work_plan_cycles cycle ON cycle.site_id=w.id WHERE w.id = ?
         AND (? OR EXISTS (SELECT 1 FROM work_plan_cycles p WHERE p.site_id=w.id AND p.worker_email=?
           AND p.next_due=? AND COALESCE(NULLIF(p.instructions,''),w.work_note,'')=?))
         AND (? IS NULL OR EXISTS (SELECT 1 FROM work_zones z WHERE z.id=? AND z.site_id=w.id AND z.deleted_at IS NULL))
         AND NOT EXISTS (SELECT 1 FROM settlement_months WHERE month = substr(?, 1, 7))
         AND NOT EXISTS (SELECT 1 FROM field_reports r WHERE r.site_id=w.id AND ? BETWEEN COALESCE(r.progress_from,r.work_date) AND r.work_date AND r.status='approved')
-        AND NOT EXISTS (SELECT 1 FROM charger_evidence prior JOIN work_progress g ON g.site_id=prior.site_id
-          WHERE prior.site_id=w.id AND prior.asset_code=? AND prior.work_date BETWEEN g.first_date AND ?)
+        AND ? >= COALESCE(g.first_date,cycle.evidence_from,?)
+        AND NOT EXISTS (SELECT 1 FROM charger_evidence prior
+          WHERE prior.site_id=w.id AND upper(trim(prior.asset_code))=?
+            AND prior.work_date>=COALESCE(g.first_date,cycle.evidence_from,?)
+            AND (g.site_id IS NOT NULL OR cycle.site_id IS NOT NULL OR prior.work_date=?))
         AND (SELECT COUNT(*) FROM work_camera_photos p WHERE p.id IN (SELECT value FROM json_each(?))
           AND p.site_id = w.id AND p.work_date = ? AND p.asset_code = ? AND p.zone_id IS ? AND p.author_id = ? AND p.evidence_id IS NULL) = ?
       ON CONFLICT(site_id, work_date, asset_code) DO NOTHING
@@ -228,7 +232,7 @@ async function saveWorkEvidence(request, env, account, admin, context) {
       Number(interior), issue, nowIso(), chargerType, canopy, JSON.stringify(workResults), zoneId, captureJson, account.name || account.email,
       assetCode,assetCode,Number(account.role==='cleaner' && account.canSwitchMode===true),JSON.stringify(safetyChecklist),
       siteId,Number(admin),account.email,guidance?.assignmentDue ?? null,guidance?.instructions ?? null,zoneId,zoneId,
-      workDate,workDate,assetCode,workDate,captureJson,workDate,assetCode,zoneId,account.id,captured.length).run();
+      workDate,workDate,workDate,workDate,assetCode,workDate,workDate,captureJson,workDate,assetCode,zoneId,account.id,captured.length).run();
     if (!result.meta.changes) throw new HttpError(409, '이미 등록된 충전기이거나, 승인·마감된 작업 또는 배정이 변경된 현장입니다.');
   } catch (error) {
     await Promise.allSettled(photos.map(([slot]) => bucket.delete(objectKey(id, slot))));
@@ -334,15 +338,21 @@ async function readSettlementLedger(db, month, ownerEmail) {
            COALESCE(p.billed, 0) AS billed, COALESCE(p.received, 0) AS received, COALESCE(p.paid, 0) AS paid,
            COALESCE(p.billing_ref, '') AS billingRef, COALESCE(p.note, '') AS note,
            p.vat, COALESCE(p.worker_breakdown, '[]') AS workerBreakdown,
+           m.email AS reportWorkerEmail,m.name AS reportWorkerName,m.role AS reportWorkerRole,
            COALESCE(p.payment_version, 0) AS paymentVersion
     FROM field_reports r LEFT JOIN settlement_payments p ON p.report_id = r.id
+    LEFT JOIN members m ON m.user_id=r.author_id AND m.role IN ('cleaner','admin')
     WHERE r.work_date LIKE ? ORDER BY r.work_date, r.site_name, r.id
   `).bind(month + '-%').all();
   const { results: workers } = await db.prepare("SELECT email,name,role='admin' AS internal FROM members WHERE role IN ('cleaner','admin') ORDER BY name,email").all();
   if (ownerEmail && !workers.some(worker => worker.email===ownerEmail)) workers.unshift({ email:ownerEmail,name:'본연 관리자',internal:1 });
   return { close, workers, rows: rows.map(row => {
     const workerBreakdown = JSON.parse(row.workerBreakdown);
-    return { ...row,workerBreakdown,internalUnits:internalWorkUnits(row,workerBreakdown) };
+    const suggestedWorker = !workerBreakdown.length && row.reportWorkerEmail && row.recordedInternalUnits===0
+      && row.reportWorkerRole==='cleaner';
+    const displayWorkers = suggestedWorker ? [{ email:row.reportWorkerEmail,name:row.reportWorkerName,
+      units:row.units,paid:row.paid,paidDate:'' }] : workerBreakdown;
+    return { ...row,workerBreakdown:displayWorkers,suggestedWorker:Boolean(suggestedWorker),internalUnits:internalWorkUnits(row,workerBreakdown) };
   }) };
 }
 
@@ -375,13 +385,31 @@ async function saveSettlementPayments(db, body, account, ownerEmail, { HttpError
     throw new HttpError(400, '정산 내역의 버전을 확인해 주세요.');
   }
   const expectedVersion = paymentVersion;
+  const source = await db.prepare(`
+    SELECT r.units,r.internal_units,r.author_id,m.email,m.name,m.role,p.worker_breakdown,p.paid
+    FROM field_reports r LEFT JOIN members m ON m.user_id=r.author_id AND m.role IN ('cleaner','admin')
+    LEFT JOIN settlement_payments p ON p.report_id=r.id WHERE r.id=?
+  `).bind(id).first();
+  if (!source) throw new HttpError(404,'정산할 보고를 찾을 수 없습니다.');
+  const existingWorkers = JSON.parse(source.worker_breakdown || '[]');
+  let requestedWorkers = workers;
+  if (requestedWorkers===undefined && existingWorkers.length) requestedWorkers=existingWorkers;
+  if (requestedWorkers === undefined && !existingWorkers.length && paid>0
+    && source.role==='cleaner' && source.internal_units===0) {
+    requestedWorkers=[{ email:source.email,units:source.units,paid,paidDate:'' }];
+  }
+  if (Array.isArray(requestedWorkers) && requestedWorkers.length===0 && (existingWorkers.length || paid>0)) {
+    throw new HttpError(409,'실제 작업자 귀속을 비울 수 없습니다. 작업자별 수량과 지급액을 입력해 주세요.');
+  }
+  if (requestedWorkers===undefined && !existingWorkers.length && paid>0 && source.paid!==paid) {
+    throw new HttpError(409,'지급할 실제 작업자를 입력해 주세요. 기존 내역은 보고 작성자를 확인해 배정할 수 있습니다.');
+  }
   let breakdown = null;
   let allocatedUnits = null;
   let allocatedInternal = null;
-  if (workers !== undefined) {
-    if (!Array.isArray(workers) || workers.length > 100) throw new HttpError(400, '실제 작업자 내역을 확인해 주세요.');
-    const current = await db.prepare('SELECT worker_breakdown FROM settlement_payments WHERE report_id = ?').bind(id).first();
-    const names = new Map(JSON.parse(current?.worker_breakdown ?? '[]').map(row => [row.email, { name:row.name,internal:Boolean(row.internal) }]));
+  if (requestedWorkers !== undefined) {
+    if (!Array.isArray(requestedWorkers) || requestedWorkers.length > 100) throw new HttpError(400, '실제 작업자 내역을 확인해 주세요.');
+    const names = new Map(existingWorkers.map(row => [row.email, { name:row.name,internal:Boolean(row.internal) }]));
     const { results } = await db.prepare("SELECT email,name,role='admin' AS internal FROM members WHERE role IN ('cleaner','admin')").all();
     for (const member of results) if (!names.has(member.email)) names.set(member.email,member);
     if (ownerEmail) names.set(ownerEmail,{ name:'본연 관리자',internal:true });
@@ -389,7 +417,7 @@ async function saveSettlementPayments(db, body, account, ownerEmail, { HttpError
     let totalInternal = 0n;
     let totalUnits = 0n;
     let totalPaid = 0n;
-    const entries = workers.map(row => {
+    const entries = requestedWorkers.map(row => {
       const email = emailAddress(row?.email);
       const { units, paid: amount, paidDate = '' } = row ?? {};
       if (!email || !names.has(email) || seen.has(email) || !nonnegative(units) || units < 1

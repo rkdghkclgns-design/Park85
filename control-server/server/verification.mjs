@@ -59,6 +59,7 @@ function verificationEnvironment(env, origin) {
     BONYEON_OWNER_EMAIL: env.BONYEON_OWNER_EMAIL,
     BONYEON_SITE_ORIGIN: env.BONYEON_FRONTEND_ORIGIN || origin,
     BONYEON_VERIFICATION_MODE: true,
+    JPEG_VALIDATE:env.JPEG_VALIDATE,
     DB: { prepare: sql => env.DB.prepare(sql.replace(verificationTables, name => 'qa_' + name)) },
     BUCKET: bucket ? {
       put: (key, body, options) => bucket.put(photoKey(key), body, options),

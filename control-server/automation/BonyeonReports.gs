@@ -81,7 +81,12 @@ function resumeReport_(settings) {
 }
 
 function holdReport_(settings, { id, claim }) {
-  callReportSite_('hold', settings, { id, claim });
+  try {
+    callReportSite_('hold', settings, { id, claim });
+  } catch (error) {
+    if (error.httpStatus !== 404 && error.httpStatus !== 409) throw error;
+    console.warn('이전 보류 기록을 찾을 수 없습니다. 관제에서 해당 발송 결과를 확인해 주세요.');
+  }
   settings.store.deleteProperty(BONYEON_RUNNER_STATE);
   console.warn('Gmail 발송 결과를 확인할 수 없어 이 건을 보류했습니다.');
 }

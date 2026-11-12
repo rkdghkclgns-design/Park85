@@ -5,6 +5,7 @@ import { Button } from "./ui/button";
 import { X, Send, Building, MapPin, Phone, User, Maximize, Check, Loader2 } from "lucide-react";
 import { allServices } from "../data/services";
 import { submitConsultation } from "../services/consultationService";
+import { PublicIntakeChallenge } from "./PublicIntakeChallenge";
 
 export function CartDrawer() {
     const { items, isOpen, setIsOpen, toggleItem, consultationForm } = useCartStore();
@@ -49,9 +50,9 @@ export function CartDrawer() {
             return () => {
                 window.removeEventListener("popstate", handlePopState);
                 // If closed programmatically (not by back button), we might need to go back
-                // But blindly calling back() is dangerous if the user navigated. 
+                // But blindly calling back() is dangerous if the user navigated.
                 // For simplicity in this specific request context "Back button closes popup":
-                // We rely on the user pressing back. If they close via X, the state remains, 
+                // We rely on the user pressing back. If they close via X, the state remains,
                 // but that's acceptable behavior for modals in many web apps (forward button reopens it).
                 // Or we can try to pop it if we know we pushed it.
             };
@@ -64,6 +65,8 @@ export function CartDrawer() {
     };
 
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [challengeToken, setChallengeToken] = useState("");
+    const [challengeVersion, setChallengeVersion] = useState(0);
     const submission = useRef<{ id: string; payload: string } | null>(null);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -75,13 +78,17 @@ export function CartDrawer() {
             return;
         }
 
+        if (!challengeToken) {
+            alert("보안 확인을 먼저 완료해 주세요.");
+            return;
+        }
         setIsSubmitting(true);
 
         try {
             const data = { ...formData, services: items.map(i => i.name) };
             const payload = JSON.stringify(data);
             if (submission.current?.payload !== payload) submission.current = { id: crypto.randomUUID(), payload };
-            await submitConsultation(data, submission.current.id);
+            await submitConsultation(data, submission.current.id, challengeToken);
             submission.current = null;
             alert("상담 요청을 접수했습니다. 확인 후 남겨주신 연락처로 안내드리겠습니다.");
             setIsOpen(false);
@@ -97,6 +104,8 @@ export function CartDrawer() {
             alert(error instanceof Error && error.name === "Error"
                 ? error.message : "상담 접수를 확인하지 못했습니다. 입력하신 내용으로 다시 시도해 주세요.");
         } finally {
+            setChallengeToken("");
+            setChallengeVersion(version => version + 1);
             setIsSubmitting(false);
         }
     };
@@ -290,11 +299,12 @@ export function CartDrawer() {
                             <div className="text-xs text-gray-500 mb-4 text-center">
                                 * 모든 정보는 필수 입력 항목입니다.
                             </div>
+                            <PublicIntakeChallenge key={challengeVersion} onToken={setChallengeToken} />
                             <Button
                                 type="submit"
                                 form="consultation-form"
                                 className="w-full h-14 text-lg font-bold bg-[#1e2b4f] hover:bg-[#151f3a] shadow-lg disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none disabled:cursor-not-allowed group transition-all"
-                                disabled={!formData.buildingType || !formData.area || !formData.address || !formData.name || !formData.contact || !formData.visitType}
+                                disabled={isSubmitting || !challengeToken || !formData.buildingType || !formData.area || !formData.address || !formData.name || !formData.contact || !formData.visitType}
                             >
                                 {(!formData.buildingType || !formData.area || !formData.address || !formData.name || !formData.contact || !formData.visitType) ? (
                                     <span className="mr-2">🔒</span>

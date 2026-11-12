@@ -158,7 +158,7 @@ export function mountCamera(evidence, api, signal, notify, onModeChange, userId,
           confirmed++;
         } catch (error) {
           if (signal.aborted) break;
-          if (![400, 403, 404, 409, 413].includes(error.status)) break;
+          if (![400, 403, 404, 409, 413, 507].includes(error.status)) break;
           await writeQueuedPhoto({ ...photo, error: error.message });
         } finally {
           window.clearTimeout(timeout);

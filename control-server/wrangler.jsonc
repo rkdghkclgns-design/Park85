@@ -1,6 +1,6 @@
 {
   "name": "bonyeon-control",
-  "main": "server/independent-worker.mjs",
+  "main": "server/jpeg-worker.mjs",
   "compatibility_date": "2026-11-12",
   "workers_dev": true,
   "preview_urls": false,
@@ -10,8 +10,18 @@
     "BONYEON_GMAIL_FROM": "bonyeon85@gmail.com",
     "BONYEON_CONSULTATION_EMAIL": "bonyeon.cs@gmail.com",
     "BONYEON_PORTAL_LINKS": "1",
-    "BONYEON_REPORT_START_DATE": "2026-11-11"
+    "BONYEON_REPORT_START_DATE": "2026-11-11",
+    "BONYEON_TURNSTILE_SITE_KEY": "0x4AAAAAAF9vnUifssNbezsR"
   },
+  "durable_objects": {
+    "bindings": [
+      { "name": "JPEG_DECODER", "class_name": "JpegValidation" },
+      { "name": "REPORT_RUNTIME", "class_name": "ReportRuntime" }
+    ]
+  },
+  "migrations": [
+    { "tag": "jpeg-report-runtime-v1", "new_sqlite_classes": ["JpegValidation", "ReportRuntime"] }
+  ],
   "d1_databases": [
     {
       "binding": "DB",

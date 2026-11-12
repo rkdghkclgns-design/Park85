@@ -1,5 +1,6 @@
 import { portalFetch } from './portal-api.js';
 import { brand, esc } from './ui.js';
+import { mountIntakeChallenge } from './public-intake.js';
 
 async function signupRequest(path = '', { method = 'GET', body, signal } = {}) {
   const form = body instanceof FormData;
@@ -30,12 +31,14 @@ export async function renderSignup(root, account, signal) {
         <label class="field"><span>통장사본</span><input name="bankCopy" type="file" accept="application/pdf,image/jpeg,image/png"></label>
         <p class="small muted">각 파일 5MB 이하 · PDF, JPG, PNG</p>
       </fieldset>`}
+      ${publicSignup ? '<div data-intake-protection></div>' : ''}
       <button class="btn primary" type="submit">${publicSignup ? '초대 요청' : '가입 신청'}</button>
     </form>
   </section></main>`;
   const form = root.querySelector('[data-signup-form]');
   const notice = root.querySelector('[data-signup-status]');
   const documents = root.querySelector('[data-business-documents]');
+  let protection;
   form.elements.kind?.addEventListener('change', () => {
     const business = form.elements.kind.value === 'business';
     documents.hidden = !business;
@@ -65,6 +68,7 @@ export async function renderSignup(root, account, signal) {
       return;
     }
     form.hidden = false;
+    if (publicSignup) protection=await mountIntakeChallenge(root.querySelector('[data-intake-protection]'),'signup_invite',signal,form.querySelector('button'));
     notice.textContent = application?.status === 'rejected' ? '이전 신청 처리 사유 · ' + application.reason : publicSignup ? '관리자가 이메일을 확인해 초대 키를 전달합니다. 키로 로그인한 뒤 가입 신청을 완료해 주세요.' : '관리자 승인 후 작업자로 등록됩니다.';
   } catch (error) {
     if (!signal.aborted) notice.textContent = error.message;
@@ -76,7 +80,7 @@ export async function renderSignup(root, account, signal) {
     try {
       const fields = new FormData(form);
       await signupRequest(publicSignup ? '/register' : '',{ method:'POST',
-        body:publicSignup ? Object.fromEntries(fields) : fields,signal });
+        body:publicSignup ? { ...Object.fromEntries(fields),challengeToken:protection?.readToken() } : fields,signal });
       if (signal.aborted) return;
       form.reset();
       form.hidden = true;
@@ -85,7 +89,8 @@ export async function renderSignup(root, account, signal) {
     } catch (error) {
       if (!signal.aborted) notice.textContent = error.message;
     } finally {
-      button.disabled = false;
+      if (publicSignup && !form.hidden) protection?.reset();
+      else button.disabled = false;
     }
   }, { signal });
 }

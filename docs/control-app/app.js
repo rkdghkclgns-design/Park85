@@ -63,7 +63,7 @@ function getRoute() {
   const hash = location.hash.slice(1);
   const mail = new URLSearchParams(location.search).get('mail');
   if (!hash && /^[a-f0-9]{64}$/.test(mail || '')) return 'control-detail/mail/' + mail;
-  const controlDetail = /^control-detail\/(site|worker|report|mail)\/[^/?]+(?:\?month=\d{4}-\d{2})?$/.test(hash);
+  const controlDetail = /^control-detail\/(site|worker|report|mail|archive)\/[^/?]+(?:\?month=\d{4}-\d{2})?$/.test(hash);
   if (controlDetail) return hash;
   if (!hash && account.nativeLogin && ['cleaner','admin','owner'].includes(account.role)) return 'control';
   if (verification && !['control', 'map', 'regions', 'users', 'analytics'].includes(hash)) return 'control';

@@ -74,6 +74,44 @@ export async function consumeAppLimit(db, scope, source, max, windowMs, now = ne
   `).bind(scope,source,new Date(+now+windowMs).toISOString(),time,time,time,max).first();
 }
 
+export function publicIntakeSettings(env) {
+  const siteKey = typeof env.BONYEON_TURNSTILE_SITE_KEY==='string' ? env.BONYEON_TURNSTILE_SITE_KEY : '';
+  const configured = /^[a-z0-9_-]{8,200}$/i.test(siteKey) && typeof env.BONYEON_TURNSTILE_SECRET_KEY==='string'
+    && env.BONYEON_TURNSTILE_SECRET_KEY.length>=20;
+  return { configured,siteKey:configured ? siteKey : '',actions:{ signup:'signup_invite',consultation:'consultation' } };
+}
+
+export async function requirePublicChallenge(request, env, body, action, { HttpError }) {
+  if (!publicIntakeSettings(env).configured) throw new HttpError(503,'보안 확인을 준비하고 있습니다. 전화 또는 이메일로 문의해 주세요.');
+  const token = body?.challengeToken;
+  const denied = () => new HttpError(403,'보안 확인이 만료되었거나 완료되지 않았습니다. 다시 확인해 주세요.');
+  if (typeof token!=='string' || !token || token.length>2048) throw denied();
+  let hostname;
+  try { hostname=new URL(env.BONYEON_FRONTEND_ORIGIN || env.BONYEON_SITE_ORIGIN || request.url).hostname.toLowerCase(); }
+  catch { throw new HttpError(503,'접수 보안 설정을 확인해 주세요.'); }
+  const parameters = { secret:env.BONYEON_TURNSTILE_SECRET_KEY,response:token,idempotency_key:crypto.randomUUID() };
+  const ip=request.headers.get('CF-Connecting-IP');
+  if (ip && ip.length<=64) parameters.remoteip=ip;
+  let validation;
+  try {
+    const response=await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify',{
+      method:'POST',headers:{ 'Content-Type':'application/json' },body:JSON.stringify(parameters),
+      signal:AbortSignal.timeout(8000),
+    });
+    if (!response.ok) throw new Error('verification unavailable');
+    validation=await response.json();
+  } catch { throw new HttpError(503,'보안 확인 서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.'); }
+  const now=Date.now();
+  const challengeTime=Date.parse(validation?.challenge_ts);
+  if (validation?.success!==true || typeof validation.hostname!=='string' || validation.hostname.toLowerCase()!==hostname || validation.action!==action
+    || !Number.isFinite(challengeTime) || now-challengeTime>300_000 || challengeTime-now>30_000) throw denied();
+  await env.DB.prepare('DELETE FROM public_challenge_uses WHERE expires_at<=?').bind(new Date(now).toISOString()).run();
+  const consumed=await env.DB.prepare(`
+    INSERT INTO public_challenge_uses(token_hash,expires_at) VALUES (?,?) ON CONFLICT(token_hash) DO NOTHING
+  `).bind(await appLoginHash(token),new Date(now+300_000).toISOString()).run();
+  if (!consumed.meta.changes) throw denied();
+}
+
 async function signInAppAdmin(pin,request,env,{ json,HttpError },frontend) {
   const db=env.DB;
   const now=new Date();
