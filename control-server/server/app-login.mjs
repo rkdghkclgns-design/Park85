@@ -1,6 +1,7 @@
 import { validMailbox } from './addresses.mjs';
 
 const appLoginCookie = '__Host-bonyeon_session';
+const portalLoginCookie = '__Host-bonyeon_portal';
 const appSessionSeconds = 7 * 24 * 60 * 60;
 const appLoginEmail = value => typeof value === 'string' ? value.trim().toLowerCase() : '';
 const appLoginHex = bytes => Array.from(bytes,byte=>byte.toString(16).padStart(2,'0')).join('');
@@ -8,11 +9,13 @@ const appLoginRandom = size => appLoginHex(crypto.getRandomValues(new Uint8Array
 const appLoginHash = async value => appLoginHex(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value))));
 const usesFrontendToken = (request,env) => Boolean(env.BONYEON_FRONTEND_ORIGIN)
   && request.headers.get('Origin')===env.BONYEON_FRONTEND_ORIGIN;
-const appLoginToken = (request,env) => usesFrontendToken(request,env) ? request.headers.get('X-Bonyeon-Session')
-  : request.headers.get('Cookie')?.split(';').map(value=>value.trim())
-    .find(value=>value.startsWith(appLoginCookie+'='))?.slice(appLoginCookie.length+1);
+const cookieToken = (request,name) => request.headers.get('Cookie')?.split(';').map(value=>value.trim())
+  .find(value=>value.startsWith(name+'='))?.slice(name.length+1);
+const appLoginToken = (request,env) => usesFrontendToken(request,env)
+  ? request.headers.has('X-Bonyeon-Session') ? request.headers.get('X-Bonyeon-Session') : cookieToken(request,portalLoginCookie)
+  : cookieToken(request,appLoginCookie);
 const validAppSessionToken = token => typeof token==='string' && /^[a-f0-9]{64}$/.test(token);
-const appLoginCookieHeader = (token,seconds) => `${appLoginCookie}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${seconds}`;
+const appLoginCookieHeader = (token,seconds,frontend=false) => `${frontend ? portalLoginCookie : appLoginCookie}=${token}; Path=/; HttpOnly; Secure; SameSite=${frontend ? 'None; Partitioned' : 'Lax'}; Max-Age=${seconds}`;
 export const usesAppLogin = env => env.BONYEON_APP_LOGIN_REQUIRED==='1';
 const hasAdminPin = env => /^[a-f0-9]{64}$/.test(env.BONYEON_ADMIN_PIN_HASH || '') && Boolean(env.BONYEON_ADMIN_PIN_PEPPER);
 
@@ -28,8 +31,7 @@ function matchesAppLoginHash(actual,expected) {
   return difference===0;
 }
 
-export async function readAppLoginIdentity(request,env) {
-  const token = appLoginToken(request,env);
+export async function readAppLoginIdentity(request,env,token=appLoginToken(request,env)) {
   if (!validAppSessionToken(token)) return null;
   const row = await env.DB.prepare(`
     SELECT k.email,k.key_hash AS keyHash,COALESCE(m.user_id,k.user_id) AS id,m.name,m.role,m.active
@@ -53,8 +55,17 @@ export async function readAppLoginIdentity(request,env) {
 
 function appLoginResponse(json,data,token,frontend) {
   if (!token) return json(data);
-  return frontend ? json({ ...data,sessionToken:token })
-    : json(data,200,{ 'Set-Cookie':appLoginCookieHeader(token,appSessionSeconds) });
+  return json(frontend ? { ...data,sessionToken:token } : data,200,
+    { 'Set-Cookie':appLoginCookieHeader(token,appSessionSeconds,frontend) });
+}
+
+export async function appSessionResponse(account,request,env,json) {
+  const token=request.headers.get('X-Bonyeon-Session');
+  if (!usesAppLogin(env) || !account.signedIn || !usesFrontendToken(request,env) || !validAppSessionToken(token)) return json(account);
+  const row=await env.DB.prepare('SELECT expires_at FROM app_login_sessions WHERE token_hash=?')
+    .bind(await appLoginHash(token)).first();
+  const remaining=row ? Math.floor((Date.parse(row.expires_at)-Date.now())/1000) : 0;
+  return json(account,200,remaining>0 ? { 'Set-Cookie':appLoginCookieHeader(token,Math.min(remaining,appSessionSeconds),true) } : {});
 }
 
 export async function appRequestSource(request, env) {
@@ -214,7 +225,13 @@ export async function handleAppLogin(path,request,env,account,context) {
     const token = appLoginToken(request,env);
     if (validAppSessionToken(token)) await env.DB.prepare('DELETE FROM app_login_sessions WHERE token_hash=?')
       .bind(await appLoginHash(token)).run();
-    return json({ ok:true },200,{ 'Set-Cookie':appLoginCookieHeader('',0) });
+    const savedCookie=cookieToken(request,portalLoginCookie);
+    const cookieAccount=frontend && savedCookie && savedCookie!==token ? await readAppLoginIdentity(request,env,savedCookie) : null;
+    const clearCookie=!frontend || !savedCookie || savedCookie===token || (account.signedIn && cookieAccount?.id===account.id);
+    if(clearCookie && savedCookie && savedCookie!==token && validAppSessionToken(savedCookie)) {
+      await env.DB.prepare('DELETE FROM app_login_sessions WHERE token_hash=?').bind(await appLoginHash(savedCookie)).run();
+    }
+    return json({ ok:true },200,clearCookie ? { 'Set-Cookie':appLoginCookieHeader('',0,frontend) } : {});
   }
   throw new HttpError(404,'요청한 로그인 기능을 찾을 수 없습니다.');
 }

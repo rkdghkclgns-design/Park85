@@ -27,7 +27,7 @@ test('GitHub Pages receives scoped app sessions and protected report links', asy
   assert.equal((await call('/verification/api/session',{ method:'POST' })).status,404);
   const login = await call('/api/auth/login',{method:'POST',body:{email:'admin',key:pin}});
   assert.equal(login.status,200);
-  assert.equal(login.headers.get('Set-Cookie'),null);
+  assert.match(login.headers.get('Set-Cookie'),/HttpOnly; Secure; SameSite=None; Partitioned/);
   const { sessionToken } = await login.json();
   assert.match(sessionToken,/^[a-f0-9]{64}$/);
   assert.equal((await (await call('/api/session',{token:sessionToken})).json()).role,'owner');

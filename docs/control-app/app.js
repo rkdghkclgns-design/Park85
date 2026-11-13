@@ -38,8 +38,13 @@ function showPhotoTransfer() {
 photoTransfer?.subscribe(showPhotoTransfer);
 const recoveryKey = 'bonyeon-recovery-id';
 if (independentPortal && !verification && !account.connectionUnavailable) {
-  if (account.signedIn && account.id) sessionStorage.setItem(recoveryKey,account.id);
-  else sessionStorage.removeItem(recoveryKey);
+  if (account.signedIn && account.id) {
+    sessionStorage.setItem(recoveryKey,account.id);
+    try { localStorage.setItem(recoveryKey,account.id); } catch {}
+  } else {
+    sessionStorage.removeItem(recoveryKey);
+    try { localStorage.removeItem(recoveryKey); } catch {}
+  }
 }
 if (account.connectionUnavailable) window.addEventListener('online',()=>location.reload(),{ once:true });
 const defaultWorkspace = verification ? 'verification:' + (account.id || 'visitor')
@@ -117,7 +122,8 @@ function renderConnectionRecovery() {
     <button class="btn primary" type="button" data-reconnect>연결 다시 확인</button>
   </section></main>`;
   app.querySelector('[data-reconnect]').addEventListener('click',()=>location.reload());
-  const id = sessionStorage.getItem(recoveryKey);
+  let id=sessionStorage.getItem(recoveryKey);
+  try { id ||= localStorage.getItem(recoveryKey); } catch {}
   if (!id) return;
   const queue = app.querySelector('[data-recovery-queue]');
   readPhotoQueue(location.pathname+':'+id).then(photos => {

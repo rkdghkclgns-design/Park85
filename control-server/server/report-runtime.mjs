@@ -18,7 +18,7 @@ export async function forwardReportRequest(request, env) {
   } catch {
     return Response.json({ error: '보고서 처리가 잠시 지연되고 있습니다. 잠시 후 다시 시도해 주세요.' }, {
       status: 503, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
-        ...(frontend ? { 'Access-Control-Allow-Origin': origin, 'Vary': 'Origin' } : {}) },
+        ...(frontend ? { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Credentials':'true', 'Vary': 'Origin' } : {}) },
     });
   }
 }

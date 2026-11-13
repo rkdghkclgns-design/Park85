@@ -3,6 +3,7 @@ import { esc } from './ui.js';
 import { readPhotoQueue, writeQueuedPhoto, removeQueuedPhoto } from './photo-queue.js';
 import { startPhotoSync } from './photo-sync.js';
 import { clearFieldIssue, focusFieldIssue } from './form-guidance.js';
+import { updatePhotoThumbnails } from './photo-thumbnails.js';
 
 const cameraLabels = {
   exteriorBefore: '외함 작업 전', exteriorAfter: '외함 작업 후',
@@ -163,10 +164,11 @@ export function mountCamera(evidence, api, signal, notify, onModeChange, userId,
       button.disabled = waitingForBefore || count >= 6;
       if (captured.some(photo => photo.slot === slot)) clearFieldIssue(button);
       const list = section.querySelector('[data-camera-images]');
-      list.innerHTML = drafts.filter(photo => photo.slot === slot).map((photo, index) =>
+      const markup = drafts.filter(photo => photo.slot === slot).map((photo, index) =>
         `<div><a href="${esc(imageLink(photo.id))}" target="_blank" rel="noopener"><img ${privateImage(imageLink(photo.id))} alt="${cameraLabels[slot]} ${index + 1}"></a>
-          <button class="link-button small" type="button" data-remove-capture="${esc(photo.id)}">삭제</button></div>`).join('');
-      if (waitingForBefore) list.insertAdjacentHTML('beforeend', '<span class="small muted">작업 전 사진을 먼저 찍어 주세요.</span>');
+          <button class="link-button small" type="button" data-remove-capture="${esc(photo.id)}">삭제</button></div>`).join('')
+        + (waitingForBefore ? '<span class="small muted">작업 전 사진을 먼저 찍어 주세요.</span>' : '');
+      updatePhotoThumbnails(list,markup);
     }
   }
 

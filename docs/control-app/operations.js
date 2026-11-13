@@ -1,4 +1,4 @@
-import { independentPortal, portalFetch, storePortalSession } from './portal-api.js';
+import { independentPortal, portalFetch, portalSignedOut, setPortalAccount, storePortalSession } from './portal-api.js';
 import { esc } from './ui.js';
 import { mountRegions, mountRegionPreview } from './regions.js';
 import { controlDetailPage, controlPage, detailHref, mountControl, mountControlDetail } from './control.js';
@@ -33,8 +33,11 @@ async function api(path, { method = 'GET', body, signal } = {}) {
 export {api as operationsRequest};
 
 export async function operationsSession() {
+  if (portalSignedOut()) return {nativeLogin:true,signedIn:false};
   try {
-    return await api('session', { signal: AbortSignal.timeout(5000) });
+    const account=await api('session', { signal: AbortSignal.timeout(5000) });
+    setPortalAccount(account.signedIn ? account.id : null);
+    return account;
   } catch (error) {
     return independentPortal ? { nativeLogin:true,signedIn:false,connectionUnavailable:![401,403].includes(error.status) } : {};
   }
@@ -46,6 +49,7 @@ export async function operationsAuth(action,body={}) {
   if (action==='logout') {
     storePortalSession(null);
     sessionStorage.removeItem('bonyeon-recovery-id');
+    try { localStorage.removeItem('bonyeon-recovery-id'); } catch {}
   }
   return payload;
 }

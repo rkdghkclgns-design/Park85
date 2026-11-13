@@ -15,8 +15,9 @@ export default {
     if (!frontend && !gmail) return new Response('Forbidden',{status:403});
     const cors = {
       'Access-Control-Allow-Origin':env.BONYEON_FRONTEND_ORIGIN,
+      'Access-Control-Allow-Credentials':'true',
       'Access-Control-Allow-Methods':'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers':'Content-Type, X-Bonyeon-Session, X-Bonyeon-Work-Mode, X-Bonyeon-Verification',
+      'Access-Control-Allow-Headers':'Content-Type, X-Bonyeon-Session, X-Bonyeon-Account, X-Bonyeon-Work-Mode, X-Bonyeon-Verification',
       'Access-Control-Expose-Headers':'Content-Disposition',
       'Access-Control-Max-Age':'600',
       'Vary':'Origin',

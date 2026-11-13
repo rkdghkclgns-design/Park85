@@ -1,9 +1,14 @@
 import { esc } from './ui.js';
+import { installPrivateImageLoader } from './private-media.js';
 
 const portalApiOrigin = document.querySelector('meta[name="bonyeon-api-origin"]')?.content || '';
 const portalSessionKey = 'bonyeon-portal-session';
 const portalVerificationKey = 'bonyeon-portal-verification';
+const signedOutKey = 'bonyeon-portal-signed-out';
+let portalAccount='';
 export const independentPortal = Boolean(portalApiOrigin);
+export const portalSignedOut=()=>independentPortal && sessionStorage.getItem(signedOutKey)==='1';
+export function setPortalAccount(id) { portalAccount=typeof id==='string' ? id : ''; }
 
 export function portalFetch(path, options = {}) {
   if (!independentPortal) return fetch(path, options);
@@ -14,15 +19,16 @@ export function portalFetch(path, options = {}) {
   const headers = new Headers(options.headers);
   const token = sessionStorage.getItem(portalSessionKey);
   if (token) headers.set('X-Bonyeon-Session',token);
+  if (portalAccount && !path.startsWith('./api/auth/login')) headers.set('X-Bonyeon-Account',portalAccount);
   const verificationToken = sessionStorage.getItem(portalVerificationKey);
   if (base==='/verification/worker/' && verificationToken) headers.set('X-Bonyeon-Verification',verificationToken);
-  return fetch(url,{ ...options,headers,credentials:'omit',redirect:'error' });
+  return fetch(url,{ ...options,headers,credentials:'include',redirect:'error' });
 }
 
 export function storePortalSession(token) {
   if (!independentPortal) return;
-  if (token) sessionStorage.setItem(portalSessionKey,token);
-  else sessionStorage.removeItem(portalSessionKey);
+  if (token) { sessionStorage.setItem(portalSessionKey,token);sessionStorage.removeItem(signedOutKey); }
+  else { sessionStorage.removeItem(portalSessionKey);sessionStorage.setItem(signedOutKey,'1');setPortalAccount(null); }
 }
 
 export function storePortalVerification(token) {
@@ -37,30 +43,7 @@ export function privateImage(path) {
 
 export function installPrivateMedia(root, notify) {
   if (!independentPortal) return;
-  const urls = new Map();
-  const seen = new WeakSet();
-  const sync = () => {
-    for (const [image,url] of urls) {
-      if (!root.contains(image)) {
-        URL.revokeObjectURL(url);
-        urls.delete(image);
-      }
-    }
-    for (const image of root.querySelectorAll('img[data-private-image]')) {
-      if (seen.has(image)) continue;
-      seen.add(image);
-      portalFetch(image.dataset.privateImage,{cache:'no-store'}).then(response => {
-        if (!response.ok) throw new Error();
-        return response.blob();
-      }).then(blob => {
-        if (!root.contains(image)) return;
-        const url = URL.createObjectURL(blob);
-        urls.set(image,url);
-        image.src = url;
-      }).catch(() => { image.alt += ' · 사진을 불러오지 못했습니다'; });
-    }
-  };
-  new MutationObserver(sync).observe(root,{childList:true,subtree:true});
+  installPrivateImageLoader(root,portalFetch,{scope:()=>portalAccount});
   root.addEventListener('click',async event => {
     const link = event.target.closest('a[href^="./api/"]');
     if (!link || event.defaultPrevented) return;

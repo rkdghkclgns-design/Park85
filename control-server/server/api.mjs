@@ -1,7 +1,7 @@
 import { validMailbox } from './addresses.mjs';
 import { handleSignup } from './signup.mjs';
 import { handleOperations } from './operations.mjs';
-import { appRequestSource, consumeAppLimit, handleAppLogin, publicIntakeSettings, readAppLoginIdentity, requirePublicChallenge, usesAppLogin } from './app-login.mjs';
+import { appRequestSource, appSessionResponse, consumeAppLimit, handleAppLogin, publicIntakeSettings, readAppLoginIdentity, requirePublicChallenge, usesAppLogin } from './app-login.mjs';
 
 const roleRank = { viewer: 1, cleaner: 1, editor: 2, admin: 3, owner: 4 };
 const memberRoles = ['viewer', 'cleaner', 'editor', 'admin'];
@@ -309,7 +309,11 @@ export async function handleApi(request, env, handleControl, handleWorkflows) {
     if (path==='/api/public-intake/settings' && method==='GET') return json(publicIntakeSettings(env));
     if (path==='/api/consultation' && method==='POST') return await submitPublicConsultation(request,env);
     const account = await identity(request, env);
-    if (path === '/api/session' && method === 'GET') return json(account);
+    const expectedAccount=request.headers.get('X-Bonyeon-Account');
+    if (expectedAccount && path!=='/api/auth/login' && (!account.signedIn || expectedAccount!==account.id)) {
+      throw new HttpError(401,'로그인 계정이 변경되었습니다. 같은 계정으로 다시 로그인해 주세요.');
+    }
+    if (path === '/api/session' && method === 'GET') return await appSessionResponse(account,request,env,json);
     if (path.startsWith('/api/auth/')) return await handleAppLogin(path,request,env,account,{ requireRole,readJson,json,HttpError });
     if (path === '/api/signup' || path.startsWith('/api/signup/')) {
       return await handleSignup(path, request, env, account, { requireRole, readJson, json, HttpError });
