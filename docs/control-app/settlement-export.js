@@ -2,6 +2,9 @@ import { esc } from './ui.js';
 
 const payable = row => BigInt(row.units - (row.internalUnits || 0)) * BigInt(row.workerPrice ?? 0);
 const outstanding = (total, paid) => total > paid ? total - paid : 0n;
+const unpaid = row => row.workerPrice==null?0n:row.workerBreakdown?.length
+  ? row.workerBreakdown.filter(w=>!w.internal).reduce((sum,w)=>sum+outstanding(BigInt(row.workerPrice)*BigInt(w.units),BigInt(w.paid)),0n)
+  : outstanding(payable(row),BigInt(row.paid));
 const amount = number => {
   const exact = BigInt(number);
   return exact <= BigInt(Number.MAX_SAFE_INTEGER) && exact >= BigInt(Number.MIN_SAFE_INTEGER) ? Number(exact) : exact.toString();
@@ -48,17 +51,17 @@ export function downloadSettlement(month, data) {
     ['부가세 (입력분)', total(row => row.vat ?? 0)], ['청구 합계', total(row => row.billed)], ['입금', total(row => row.received)],
     ['미수금', total(row => row.billed - row.received)], ['작업자 지급', total(row => row.paid)],
     ['관리자 직접 작업 수량 (지급 제외)',total(row => row.internalUnits || 0)],
-    ['작업자 미지급 (단가 확인분)', total(row => row.workerPrice == null ? 0n : outstanding(payable(row), BigInt(row.paid)))],
+    ['작업자 미지급 (단가 확인분)', total(unpaid)],
   ]);
   add('현장별 정산', [
     ['작업일','현장','보고 작업자','실작업 수량','관리자 직접 작업 수량','계약 단가','작업 단가','공급가액','부가세','청구 합계','입금','미수','작업자 지급','작업자 미지급','청구 번호','메모'],
     ...rows.map(row => [row.workDate,row.siteName,row.authorName,row.units,row.internalUnits || 0,row.contractPrice,row.workerPrice,
       row.vat == null ? null : row.billed - row.vat,row.vat,row.billed,row.received,row.billed - row.received,row.paid,
-      row.workerPrice == null ? null : amount(outstanding(payable(row), BigInt(row.paid))),row.billingRef,row.note]),
+      row.workerPrice == null ? null : amount(unpaid(row)),row.billingRef,row.note]),
   ]);
   add('작업자별 지급', [
     ['작업일','현장','작업자','이메일','작업 수량','대당 작업 단가','정산 예정','지급','미지급','초과 지급','지급일'],
-    ...rows.flatMap(row => row.workerBreakdown.filter(worker => !worker.internal).map(worker => {
+    ...rows.flatMap(row => (row.suggestedWorker?[]:row.workerBreakdown).filter(worker => !worker.internal).map(worker => {
       const expected = BigInt(row.workerPrice ?? 0) * BigInt(worker.units);
       const paid = BigInt(worker.paid);
       return [row.workDate,row.siteName,worker.name,worker.email,worker.units,row.workerPrice,

@@ -1,3 +1,4 @@
+import { archivedPhotoDb } from './operational-data.mjs';
 const cameraSlots = ['exteriorBefore', 'exteriorAfter', 'interiorBefore', 'interiorAfter'];
 const cameraUuid = value => typeof value === 'string' && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
 const cameraText = value => typeof value === 'string' ? value.trim() : '';
@@ -363,7 +364,8 @@ export async function handleCameraWork(path, request, env, account, admin, conte
   }
   if (path === '/api/work/capture' && method === 'GET') {
     const id = query.get('id');
-    if (!cameraUuid(id) || !(await db.prepare('SELECT 1 FROM work_camera_photos WHERE id = ? AND (? OR author_id = ?)').bind(id, Number(admin), account.id).first())) {
+    const photoDb=cameraUuid(id)&&await archivedPhotoDb(env,id,account)||db;
+    if (!cameraUuid(id) || !(await photoDb.prepare('SELECT 1 FROM work_camera_photos WHERE id = ? AND (? OR author_id = ?)').bind(id, Number(admin), account.id).first())) {
       throw new HttpError(404, '사진을 찾을 수 없습니다.');
     }
     const photo = await env.BUCKET?.get(cameraPhotoKey(id));

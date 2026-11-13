@@ -27,6 +27,7 @@ export function navigationItems(account,{independentPortal=false,verification=fa
 }
 
 export function resolveNavigationRoute(hash,account,{independentPortal=false,verification=false,mail=''}={}) {
+  if(hash==='test-data'&&!verification&&managerRoles.has(account.role))return hash;
   if (!hash && /^[a-f0-9]{64}$/.test(mail)) return 'control-detail/mail/'+mail;
   if (/^control-detail\/(site|worker|report|mail|archive)\/[^/?]+(?:\?month=\d{4}-\d{2})?$/.test(hash)) return hash;
   if (hash==='history' && account.role==='cleaner') return 'control';

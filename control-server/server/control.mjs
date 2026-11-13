@@ -1,5 +1,6 @@
 import { buildOfficeAcceptanceMails, buildOfficeMail } from './office-mail.mjs';
 import { validMailbox } from './addresses.mjs';
+import { archivedDetailDb, readTestArchive } from './operational-data.mjs';
 import { clientRecipients, clientRecipientsSql, finalClientReportSql, legacyClientPolicy, normalizeClientRecipients } from './client-recipients.mjs';
 import { displayWorkResults, normalizeWorkResults } from './work-results.mjs';
 import { internalWorkUnits, readReportDraftList, readWorkerEarnings, saveReportDraft, savePartialWork, workerCanMoveEvidenceZone } from './progress.mjs';
@@ -1661,6 +1662,16 @@ export async function handleControl(path, request, env, account, context) {
       throw new HttpError(400, '조회할 상세 정보와 월을 확인해 주세요.');
     }
     if (kind === 'mail') return json(await readOfficeSnapshot(db, id, account, context, env));
+    const archived=await archivedDetailDb(env,kind,id);
+    if(archived) {
+      requireRole(account,'admin');
+      const detail=await readControlDetail(archived,kind,id,month,account,context);
+      const siteId=kind==='site'?id:detail.reports[0]?.siteId;
+      const {results:archivedCaptures}=siteId?await archived.prepare(`SELECT id,slot,work_date AS workDate,asset_code AS assetCode FROM work_camera_photos
+        WHERE site_id=? AND evidence_id IS NULL ORDER BY created_at LIMIT 61`).bind(siteId).all():{results:[]};
+      return json({...detail,testArchive:true,canEditResults:false,devices:(detail.devices||[]).map(d=>({...d,canMoveZone:false})),
+        archivedCaptures:archivedCaptures.slice(0,60),archivedCapturesOverflow:archivedCaptures.length>60});
+    }
     return json(await readControlDetail(db, kind, id, month, account, context));
   }
   if (path === '/api/control/report' && request.method === 'POST') {
@@ -1674,6 +1685,9 @@ export async function handleControl(path, request, env, account, context) {
     return json(await saveReportDraft(db,await readJson(request,env),account,context));
   }
   requireRole(account, 'admin');
+  if(path==='/api/control/test-archive'&&request.method==='GET') {
+    return json(await readTestArchive(env.BONYEON_ALL_DATA_DB||db));
+  }
   if (path === '/api/control/mail/archive' && request.method === 'GET') {
     const hash = url.searchParams.get('id');
     if (!/^[a-f0-9]{64}$/.test(hash || '')) throw new HttpError(400,'조회할 보고 자료를 확인해 주세요.');

@@ -1,4 +1,6 @@
 import { displayWorkResults, normalizeWorkResults } from './work-results.mjs';
+import { reconcileSettlement } from './settlement-reconciliation.mjs';
+import { archivedEvidenceDb } from './operational-data.mjs';
 import { cameraPhotoKey, captureSelectionIds, handleCameraWork, readCaptureSelection, validateProofJpeg, validateWorkZone } from './camera.mjs';
 import { internalWorkUnits, readWorkCompletion, workerCanMoveEvidenceZone } from './progress.mjs';
 
@@ -336,14 +338,15 @@ async function moveWorkEvidenceZones(db,{ zoneId,moves },account,admin,{ HttpErr
 
 async function readWorkPhoto(env, id, slot, account, admin, { HttpError }) {
   if (!isUuid(id) || !photoSlots.includes(slot)) throw new HttpError(404, '사진을 찾을 수 없습니다.');
-  const access = await env.DB.prepare('SELECT exterior, interior FROM charger_evidence WHERE id = ? AND (? OR author_id = ?)')
+  const db=await archivedEvidenceDb(env,id,account)||env.DB;
+  const access = await db.prepare('SELECT exterior, interior FROM charger_evidence WHERE id = ? AND (? OR author_id = ?)')
     .bind(id, Number(admin), account.id).first();
   if (!access || (slot.startsWith('exterior') ? !access.exterior : !access.interior)) {
     throw new HttpError(404, '사진을 찾을 수 없습니다.');
   }
   let photo = await env.BUCKET?.get(objectKey(id, slot));
   if (!photo && env.BUCKET) {
-    const capture = await env.DB.prepare('SELECT id FROM work_camera_photos WHERE evidence_id = ? AND slot = ? ORDER BY created_at, id LIMIT 1').bind(id, slot).first();
+    const capture = await db.prepare('SELECT id FROM work_camera_photos WHERE evidence_id = ? AND slot = ? ORDER BY created_at, id LIMIT 1').bind(id, slot).first();
     if (capture) photo = await env.BUCKET.get(cameraPhotoKey(capture.id));
   }
   if (!photo) throw new HttpError(404, '사진을 찾을 수 없습니다.');
@@ -645,7 +648,8 @@ export async function handleWorkflows(path, request, env, account, context) {
   if (path === '/api/work/settlement' && method === 'GET') {
     const month = url.searchParams.get('month');
     if (!hasMonth(month, validDate)) throw new HttpError(400, '조회할 결산 월을 확인해 주세요.');
-    return json(await readSettlementLedger(db, month, context.emailAddress(env.BONYEON_OWNER_EMAIL)));
+    const ledger=await readSettlementLedger(db, month, context.emailAddress(env.BONYEON_OWNER_EMAIL));
+    return json({...ledger,reconciliation:reconcileSettlement(ledger.rows)});
   }
   if (path === '/api/work/settlement/export' && method === 'GET') {
     const month = url.searchParams.get('month');

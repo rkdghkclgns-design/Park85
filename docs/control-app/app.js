@@ -109,6 +109,7 @@ function renderMore() {
     ${independentPortal && !verification && manager ? `<details class="card ops-upload"><summary><strong>기존 브라우저 자료</strong></summary>
       <div class="stack region-refresh"><p>예전에 이 브라우저에 저장한 보고서와 사진을 확인하고 내보낼 수 있습니다. 운영 관제의 보고·정산 화면은 ‘현장 보고·관제’에서 확인합니다.</p>
       <div class="row"><a class="btn" href="#legacy">기존 자료 열기</a><button class="btn" type="button" data-action="export-browser-data">저장된 원본·사진 내보내기</button></div></div></details>` : ''}
+    ${manager && !verification ? `<section class="card ops-upload stack"><h2>검증 자료·정산 점검</h2><p>테스트 현장과 사진은 보관함에서 확인하고 실제 운영 합계와 분리해 관리합니다.</p><div><a class="btn" href="#test-data">검증 자료 열기</a></div></section>` : ''}
     ${account.role==='owner' && !verification ? `<details class="card ops-upload"><summary><strong>시스템 진단</strong></summary>
       <div class="stack region-refresh"><p>검증 작업공간은 실제 운영 장부와 분리됩니다.</p><div><a class="btn" href="/verification/#control">검증 작업공간 열기</a></div></div></details>` : ''}`;
 }
@@ -302,7 +303,7 @@ function render({ keepScroll = false } = {}) {
   if (route === 'alerts') body = renderAlerts();
   if (route === 'legacy') body = renderLegacyArchive();
   if (route === 'more') body = renderMore();
-  if (controlDetail || ['map', 'control', 'analytics', 'regions', 'users', 'about'].includes(route)) body = operationsPage(route, account);
+  if (controlDetail || ['map', 'control', 'analytics', 'regions', 'users', 'about', 'test-data'].includes(route)) body = operationsPage(route, account);
   if (route.startsWith('d-')) body = renderReport(route.slice(2));
   if (independentPortal && !verification && isLegacyRoute(route)) body=legacyNotice()+body;
   const scroll = keepScroll ? window.scrollY : 0;

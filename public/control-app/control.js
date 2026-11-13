@@ -162,14 +162,15 @@ export async function mountControlDetail(root, route, api, signal, movedZone) {
           <label class="field"><span>보완 내용</span><textarea name="note" rows="2" maxlength="500" required></textarea></label>
           <p class="small" role="status"></p><div><button class="btn primary" type="submit">지정 대상 보완 요청</button></div>
         </form></section>` : '';
-    root.innerHTML = `<header class="page-title"><h1>${esc(title)}</h1><p>${type} 상세${address ? ' · ' + esc(address) : ''}</p>
+    const archivedPhotos=data.archivedCaptures?.length?`<section class="card ops-upload stack"><h2>보고 등록 전 촬영 사진</h2><div class="detail-photo-gallery">${data.archivedCaptures.map(p=>`<figure><a href="./api/work/capture?id=${encodeURIComponent(p.id)}" target="_blank" rel="noopener"><img ${privateImage('./api/work/capture?id='+encodeURIComponent(p.id))} alt="${esc(evidencePhotoLabels[p.slot])}"></a><figcaption>${esc(p.workDate)} · ${esc(p.assetCode)} · ${esc(evidencePhotoLabels[p.slot])}</figcaption></figure>`).join('')}</div>${data.archivedCapturesOverflow?'<p>최근 사진 60장을 표시합니다. 원본은 보존되어 있습니다.</p>':''}</section>`:'';
+    root.innerHTML = `${data.testArchive?'<aside class="card ops-upload"><strong>보관된 검증 기록 · 읽기 전용</strong><p>원본과 사진은 보존되며 실제 관제·보고·결산 합계에서 제외됩니다.</p><a class="btn compact" href="#test-data">검증 자료 보관함</a></aside>':''}<header class="page-title"><h1>${esc(title)}</h1><p>${type} 상세${address ? ' · ' + esc(address) : ''}</p>
       ${nextDue ? `<p>다음 예정일 · ${esc(nextDue)}</p>` : ''}
       ${example ? '<p>서식 테스트 · 예시 데이터</p>' : ''}</header>
       <section class="card ops-upload stack"><div class="row between"><h2>${kind === 'report' ? '등록 내용' : '작업 이력'}</h2>
       ${kind !== 'report' && !example ? `<label class="field"><span>조회 월</span><input type="month" data-detail-month value="${esc(month)}"></label>` : ''}</div>
       ${work || '<p class="muted">이 달에 등록된 작업 결과가 없습니다.</p>'}
       ${verificationMail ? '<div><button class="btn compact" type="button" data-verification-mail>검증 완료 보고 메일 보내기</button></div><p class="small" role="status" data-verification-mail-status></p>' : ''}</section>${equipment}${revisionForm}${customerAmounts}${workerAmounts}
-      ${overflow ? '<p class="small muted">최근 내역 일부를 표시합니다.</p>' : ''}`;
+      ${archivedPhotos}${overflow ? '<p class="small muted">최근 내역 일부를 표시합니다.</p>' : ''}`;
     mountEvidenceZoneEditors(root.querySelector('[data-report-equipment]'),api,signal,change=>mountControlDetail(root,route,api,signal,change));
     root.querySelector('[data-zone-moved]')?.focus();
     root.querySelector('[data-detail-month]')?.addEventListener('change', event => {

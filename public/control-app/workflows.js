@@ -1,5 +1,6 @@
 import { privateImage } from './portal-api.js';
 import { esc } from './ui.js';
+import { reconciliationMarkup } from './settlement-reconciliation.js';
 import { cameraFields, mountCamera, zoneFields } from './camera.js';
 import { downloadSettlement, settlementReview } from './settlement-export.js';
 import { focusFieldIssue } from './form-guidance.js';
@@ -226,7 +227,7 @@ function ledgerRows(model, month, today) {
   const status = model.close ? `마감 완료 · ${new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeZone: 'Asia/Seoul' }).format(new Date(model.close.closedAt))} · ${esc(model.close.closedBy)}`
     : `마감 전 · 필수 확인 ${unresolved}건 (승인·단가·청구·부가세·작업자 배분·지급일)`;
   const checks = settlementReview(model);
-  return `<p class="small"><strong>${status}</strong></p>
+  return `${reconciliationMarkup(model.reconciliation)}<p class="small"><strong>${status}</strong></p>
     <dl class="ledger-summary">${summary.map(([title, value]) =>
       `<div><dt>${title}</dt><dd>${typeof value === 'bigint' ? money(value) : value}</dd></div>`).join('')}</dl>
     <details class="stack" ${checks.length && !model.close ? 'open' : ''}><summary>정산 점검 · 확인 ${checks.length}건</summary>
@@ -644,6 +645,9 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
       if (row) {
         row.open = true;
         row.scrollIntoView({ block: 'center' });
+        const names={vat:'vat',paid:'paid',paidDate:'workerPaidDate',billing:'billed',workers:'actualWorker'};
+        const name=names[button.dataset.checkField];
+        if(name)row.querySelector('[name="'+name+'"]')?.focus();
       }
       return;
     }

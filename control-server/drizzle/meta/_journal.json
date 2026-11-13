@@ -225,6 +225,20 @@
       "when": 1794364800031,
       "tag": "0031_evidence_submission_receipt",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1794364800032,
+      "tag": "0032_operational_test_archive",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1794364800033,
+      "tag": "0033_archive_known_test_sites",
+      "breakpoints": true
     }
   ]
 }

@@ -4,6 +4,7 @@ import { mountRegions, mountRegionPreview } from './regions.js';
 import { controlDetailPage, controlPage, detailHref, mountControl, mountControlDetail } from './control.js';
 import { mountSignupReview } from './signup.js';
 import { analyticsPage, mountAnalytics } from './analytics.js';
+import { testDataPage, mountTestData } from './test-data.js';
 
 export const roleNames = { owner: '소유자', admin: '관리자', editor: '업로드 담당자', cleaner: '청소 작업자', viewer: '조회 전용' };
 export const workModeKey = 'bonyeon-work-mode:' + (location.pathname.startsWith('/verification/') ? 'verification' : 'production');
@@ -70,6 +71,7 @@ function unavailable(account) {
 }
 
 export function operationsPage(route, account) {
+  if (route === 'test-data') return testDataPage(account);
   if (route === 'about') return brochure();
   if (route === 'control') return controlPage(account);
   if (route === 'analytics') return analyticsPage(account);
@@ -598,6 +600,7 @@ export function mountOperations(root, route, account) {
   if (route === 'map') dispose = mountMap(root, account, controller);
   if (route === 'control') mountControl(root, account, api, controller.signal);
   if (route === 'analytics') mountAnalytics(root, api, controller.signal);
+  if (route === 'test-data') mountTestData(root, account, api, controller.signal);
   if (route.startsWith('control-detail/')) mountControlDetail(root, route, api, controller.signal);
   if (route === 'regions') mountRegions(root, account, api, controller.signal);
   if (route === 'users') mountUsers(root, account, controller);
