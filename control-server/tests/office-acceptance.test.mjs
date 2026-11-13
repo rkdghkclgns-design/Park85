@@ -56,6 +56,9 @@ test('isolated real workflow creates the example; production-style diagnostic pr
   await call('work/settlement/payments', 'PATCH', { id, paymentVersion:0, billed: payment.billed, vat: payment.vat, received: payment.received,
     paid: payment.paid, billingRef: payment.billing_ref, workers: [allocation] });
   await call('work/settlement/close', 'POST', { month });
+  const completion = (await call('control/gmail/claim','POST',{ requestId:crypto.randomUUID() })).message;
+  assert.match(completion.id,/^gmail:completion:/);
+  await call('control/gmail/complete','POST',{ id:completion.id,claim:completion.claim });
   const auto = [];
   for (let i = 0; i < 2; i++) {
     const { message } = await call('control/gmail/claim', 'POST', { requestId: crypto.randomUUID() });

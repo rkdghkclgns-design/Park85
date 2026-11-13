@@ -30,7 +30,7 @@ async function harness() {
         run:async(...args)=>{
           queries++;
           const result = await statement.run(...args);
-          if (failCommittedInsert && /INSERT INTO report_mail/.test(sql) && result.meta.changes) {
+          if (failCommittedInsert && /(?:INSERT INTO report_mail|UPDATE report_mail SET recipient=)/.test(sql) && result.meta.changes) {
             failCommittedInsert = false;
             throw Error('isolated lost database write response');
           }
@@ -76,11 +76,14 @@ async function harness() {
     .bind(cleaner,cleaner,stamp).run();
   await db.prepare("INSERT INTO work_sites(id,name,address,lat,lng,status,updated_at,due_date) VALUES ('site','예시 현장','예시 주소',37,127,'done',?,?)")
     .bind(stamp,today).run();
-  const seedReport = notes => db.prepare(`
+  const seedReport = async notes => {
+    await db.prepare(`
     INSERT INTO field_reports(id,site_id,work_date,author_id,author_name,site_name,site_address,
       units,exterior,interior,notes,status,updated_at,completion_reported_at,contract_price,worker_price)
     VALUES ('report','site',?,?,'테스트 작업자','예시 현장','예시 주소',1,1,0,?,'submitted',?,?,20000,10000)
   `).bind(today,cleaner,notes,stamp,stamp).run();
+    await db.prepare("UPDATE field_reports SET status='approved',approved_at=? WHERE id='report'").bind(stamp).run();
+  };
   return { db,env,objects,runner,call,seedReport,puts:()=>puts,resetQueries:()=>{queries=0;},queryCount:()=>queries,
     loseNextPut:()=>{failCommittedPut=true;},loseNextInsert:()=>{failCommittedInsert=true;} };
 }
@@ -121,7 +124,7 @@ test('uncertain archive and database commits recover without extra messages or d
   const requestId = crypto.randomUUID();
   h.loseNextPut();
   await h.runner('claim',{requestId},500);
-  assert.equal((await h.db.prepare('SELECT COUNT(*) AS count FROM report_mail').first()).count,0);
+  assert.equal((await h.db.prepare('SELECT COUNT(*) AS count FROM report_mail').first()).count,1,'approval outbox survives an interrupted archive write');
   assert.equal(h.objects.size,1);
   h.loseNextInsert();
   await h.runner('claim',{requestId},500);
@@ -213,6 +216,8 @@ test('an existing valid archive keeps its encoding and references across gzip im
   h.objects.set(archive.key,otherEncoding);
   const otherMarker = row.body.replace(/[a-f0-9]{64}$/,otherHash);
   await h.db.prepare('UPDATE report_mail SET body=?,canceled_at=? WHERE id=?').bind(otherMarker,stamp,first.id).run();
+  const preview = await h.call('control/mail?kind=completion&reference=report');
+  await h.call('control/mail','POST',{ kind:'completion',reference:'report',recipient:preview.recipient,previewToken:preview.previewToken });
   const next = (await h.runner('claim',{requestId:crypto.randomUUID()})).message;
   assert.equal(next.body,first.body);
   const saved = await h.db.prepare('SELECT body,html FROM report_mail WHERE id=?').bind(next.id).first();

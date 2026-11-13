@@ -194,7 +194,9 @@ test('recurring assignments, private evidence, locked close, and scheduled mail 
   await request('control/run', 'POST', undefined, null, 200, headers);
   assert.equal(sent.length, 3);
   assert.deepEqual(sent.map(mail => mail.to[0]).sort(), [owner, owner, 'contractor@bonyeon.example']);
-  assert.equal((await request('control/overview?month=' + priorMonth)).deliveries.length, 3);
+  const deliveries = (await request('control/overview?month=' + priorMonth)).deliveries;
+  assert.equal(deliveries.filter(row=>row.sentAt).length, 3);
+  assert.equal(deliveries.filter(row=>row.kind==='completion' && row.queued).length, 1);
 });
 
 test('the Gmail runner claims each report once and only its receipt can acknowledge delivery', async () => {
@@ -246,10 +248,17 @@ test('the Gmail runner claims each report once and only its receipt can acknowle
   }), env, handleControl, handleWorkflows);
   assert.equal((await submit('첫 완료 등록')).status, 200);
   assert.equal((await submit('수정한 작업 결과')).status, 200);
+  const submitted = await db.prepare("SELECT id FROM field_reports WHERE site_id='site-1' AND work_date=?").bind(workDate).first();
+  const approved = await handleApi(new Request(origin+'/api/control/review',{
+    method:'PATCH',headers:{ Origin:origin,'Content-Type':'application/json',
+      'oai-authenticated-user-id':'owner','oai-authenticated-user-email':owner },
+    body:JSON.stringify({ id:submitted.id,action:'approve' }),
+  }),env,handleControl,handleWorkflows);
+  assert.equal(approved.status,200);
   const responses = await Promise.all(Array.from({ length: 5 }, () => call('claim')));
   for (const response of responses) assert.equal(response.status, 200);
   const claimed = (await Promise.all(responses.map(response => response.json()))).map(result => result.message).filter(Boolean);
-  assert.deepEqual(claimed.map(job => job.id.split(':')[1]).sort(), ['completion', 'contractor', 'daily', 'settlement']);
+  assert.deepEqual(claimed.map(job => job.id.split(':')[1]).sort(), ['completion', 'contractor', 'contractor', 'daily', 'settlement']);
   const completion = claimed.find(job => job.id.startsWith('gmail:completion:'));
   assert.equal(completion.to, owner);
   assert.match(completion.subject, /^\[본연\] 작업 완료 보고 · 현장 1 · /);
@@ -282,7 +291,7 @@ test('the Gmail runner claims each report once and only its receipt can acknowle
   }), env, handleControl, handleWorkflows);
   const status = await overview.json();
   assert.ok(status.gmailRunner.lastSeenAt);
-  assert.equal(status.deliveries.filter(row => row.sentAt).length, 4);
+  assert.equal(status.deliveries.filter(row => row.sentAt).length, 5);
 });
 
 test('a multi-megabyte monthly report is stored safely and can be replayed in full', async () => {

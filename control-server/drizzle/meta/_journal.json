@@ -211,6 +211,13 @@
       "when": 1794364800029,
       "tag": "0029_recipient_policy_and_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1794364800030,
+      "tag": "0030_approval_completion_outbox",
+      "breakpoints": true
     }
   ]
 }

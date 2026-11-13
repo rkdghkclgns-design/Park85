@@ -190,6 +190,7 @@ async function reviewFieldReport(db, body, account, { HttpError }) {
   const result = await db.prepare(`
     UPDATE field_reports AS report
     SET status = 'approved', review_note = '', updated_at = ?, approved_at = COALESCE(approved_at, ?), history_actor=?,
+        completion_reported_at = COALESCE(completion_reported_at, ?),
         region_name = COALESCE(region_name, (SELECT region_name FROM site_reporting WHERE site_id = report.site_id)),
         contract_price = COALESCE(contract_price, (
           SELECT c.contract_price FROM charger_regions c
@@ -206,7 +207,7 @@ async function reviewFieldReport(db, body, account, { HttpError }) {
           AND COALESCE(SUM(e.interior), 0) = report.interior
         FROM charger_evidence e WHERE e.site_id = report.site_id AND e.work_date BETWEEN COALESCE(report.progress_from,report.work_date) AND report.work_date
       ))
-  `).bind(time, time, actor, id, expected, expected).run();
+  `).bind(time, time, actor, time, id, expected, expected).run();
   if (!result.meta.changes) throw new HttpError(409, '승인할 수 없는 상태입니다. 정기 배정 건은 충전기별 증빙 수량이 보고와 일치해야 합니다.');
 }
 
@@ -590,8 +591,8 @@ async function buildControlMail(db, env, kind, reference, context) {
   }
   const recipient = await readAdminRecipient(db, env);
   if (kind === 'completion') {
-    const row = await db.prepare('SELECT * FROM field_reports WHERE id = ? AND completion_reported_at IS NOT NULL').bind(reference).first();
-    if (!row) throw new HttpError(404, '등록된 작업 완료 보고를 찾을 수 없습니다.');
+    const row = await db.prepare("SELECT * FROM field_reports WHERE id = ? AND status = 'approved' AND completion_reported_at IS NOT NULL").bind(reference).first();
+    if (!row) throw new HttpError(404, '관리자 승인을 마친 작업 완료 보고를 선택해 주세요.');
     const detail = completionDetails(row, await reportEquipment(db, kind, reference), env);
     return { recipient, subject: completionSubject(row), text: detail.detailText, html: detail.html };
   }
@@ -1130,6 +1131,11 @@ function queuedMailRoute(job, env) {
   }
   if (job.kind === 'consultation') return { sql:'SELECT ?',args:[env.BONYEON_CONSULTATION_EMAIL || env.BONYEON_GMAIL_FROM] };
   if (job.kind === 'tax') return { sql: 'SELECT tax_email FROM control_settings WHERE id = 1', args: [] };
+  if (job.kind === 'completion') return {
+    sql: `SELECT COALESCE((SELECT admin_email FROM control_settings WHERE id=1), ?)
+      FROM field_reports WHERE id=? AND status='approved' AND completion_reported_at IS NOT NULL`,
+    args: [env.BONYEON_OWNER_EMAIL || '', job.reference],
+  };
   if (job.kind === 'contractor') {
     return { sql: `SELECT c.email AS value FROM field_reports r JOIN client_mail_recipients c ON c.site_id=r.site_id
                    WHERE r.id=? AND ${finalClientReportSql('r')} AND c.email=? AND c.enabled_at=COALESCE(?,?)
@@ -1187,16 +1193,42 @@ function gmailClaimBudget(db) {
     spend: count => { queries += count; } };
 }
 
-async function claimQueuedGmailReport(db, env, now, requestId, budget, consultation = false) {
+async function claimQueuedGmailReport(db, env, now, requestId, budget, context, consultation = false) {
   if (!budget.has(3)) return null;
   const { results: jobs } = await db.prepare(`
-    SELECT id, kind, reference, recipient, subject, body, html, payload_key, test_day,recipient_policy_at,historical_consent_at FROM report_mail
-    WHERE requested_by IS NOT NULL AND sent_at IS NULL AND canceled_at IS NULL AND provider_id IS NULL
+    SELECT id, kind, reference, recipient, subject, body, html, payload_key, test_day,recipient_policy_at,historical_consent_at,requested_by FROM report_mail
+    WHERE requested_by IS NOT NULL AND sent_at IS NULL AND canceled_at IS NULL AND provider_id IS NULL AND hold_at IS NULL
       AND (kind = 'consultation') = ?
     ORDER BY created_at, id LIMIT 8
   `).bind(Number(consultation)).all();
-  for (const job of jobs) {
+  for (let job of jobs) {
     if (!budget.has(3)) break;
+    let prepared;
+    if (job.kind === 'completion' && job.requested_by === 'auto:approval') {
+      if (!budget.has(12)) break;
+      let message;
+      try { message = await buildControlMail(db, env, 'completion', job.reference, context); }
+      catch (error) {
+        if (!(error instanceof context.HttpError) || error.status !== 404) throw error;
+        await db.prepare('UPDATE report_mail SET canceled_at=? WHERE id=? AND provider_id IS NULL AND sent_at IS NULL')
+          .bind(now.toISOString(),job.id).run();
+        continue;
+      }
+      if (!validGmailRecipient(message.recipient)) continue;
+      const packed = await packReportMail(message.text,message.html,env);
+      const body = packed?.text ?? heldReportText;
+      const html = packed?.html ?? '';
+      const stored = await db.prepare(`UPDATE report_mail SET recipient=?,sender=?,subject=?,body=?,html=?,
+        hold_at=?,provider_id=?,payload_key=?
+        WHERE id=? AND body=? AND provider_id IS NULL AND sent_at IS NULL AND canceled_at IS NULL
+          AND EXISTS(SELECT 1 FROM field_reports WHERE id=report_mail.reference AND status='approved')`)
+        .bind(message.recipient,env.BONYEON_GMAIL_FROM,message.subject,body,html,
+          packed ? null : now.toISOString(),packed ? null : 'gmail:storage:' + crypto.randomUUID(),
+          packed ? null : await mailPreviewToken('completion',job.reference,message),job.id,job.body).run();
+      if (!stored.meta.changes || !packed) continue;
+      job = { ...job,recipient:message.recipient,subject:message.subject,body,html };
+      prepared = { packed,text:message.text,html:message.html };
+    }
     const recipient = consultation ? env.BONYEON_CONSULTATION_EMAIL || env.BONYEON_GMAIL_FROM : job.recipient;
     if (!validGmailRecipient(recipient)) continue;
     const target = queuedMailRoute(job, env);
@@ -1213,12 +1245,14 @@ async function claimQueuedGmailReport(db, env, now, requestId, budget, consultat
         recipient = ?,
         provider_id = CASE WHEN ${current} THEN ? ELSE NULL END,
         claim_request_id = CASE WHEN ${current} THEN ? ELSE NULL END,
-        canceled_at = CASE WHEN ${current} THEN NULL ELSE ? END
+        canceled_at = CASE WHEN ${current} OR (kind='completion' AND requested_by='auto:approval') THEN NULL ELSE ? END
       WHERE id = ? AND sent_at IS NULL AND canceled_at IS NULL AND provider_id IS NULL AND ${availableGmailRequest}
       RETURNING provider_id
     `).bind(recipient, recipient, ...target.args, 'gmail:' + claim, recipient, ...target.args, requestId,
       recipient, ...target.args, now.toISOString(), job.id, requestId, requestId).first();
     if (reserved?.provider_id) {
+      if (prepared) return { id:job.id,claim,to:recipient,subject:job.subject,
+        ...packedGmailBody(job.kind,null,prepared.packed,prepared.text,prepared.html,env) };
       const { body, html } = await unpackReportMail(job.body,job.html,env);
       return { id:job.id,claim,to:recipient,subject:job.subject,...gmailOfficeBody(job.kind,job.payload_key,body,html,env) };
     }
@@ -1358,7 +1392,7 @@ async function claimGmailReport(env, context, now, requestId) {
   const budget = gmailClaimBudget(env.DB);
   env = { ...env, DB: budget.db, reportMailQueryBudget:budget };
   const db = env.DB;
-  const manual = await claimQueuedGmailReport(db, env, now, requestId, budget);
+  const manual = await claimQueuedGmailReport(db, env, now, requestId, budget, context);
   if (manual) return manual;
   // Recover previously unstored reports with a fresh query allowance. No Gmail
   // attempt has occurred for these holds, so this cannot repeat an uncertain send.
@@ -1383,8 +1417,6 @@ async function claimGmailReport(env, context, now, requestId) {
       UNION ALL
       SELECT 'contractor', r.id, 3, r.approved_at, c.email FROM field_reports r JOIN client_mail_recipients c ON c.site_id=r.site_id
         WHERE ${finalClientReportSql('r')} AND r.approved_at >= ? AND r.approved_at>=c.enabled_at
-      UNION ALL
-      SELECT 'completion', id, 0, completion_reported_at, NULL FROM field_reports WHERE completion_reported_at >= ?
     )
     SELECT kind, reference, recipient FROM eligible e
     WHERE NOT EXISTS (
@@ -1393,7 +1425,7 @@ async function claimGmailReport(env, context, now, requestId) {
         AND (m.sent_at IS NOT NULL OR m.provider_id LIKE 'gmail:%' OR m.requested_by IS NOT NULL)
     )
     ORDER BY priority, sequence, reference LIMIT 20
-  `).bind(dailyFrom, dailyFrom, dailyThrough, dailyThrough, start, today.slice(0, 7), start, start).all() : { results: [] };
+  `).bind(dailyFrom, dailyFrom, dailyThrough, dailyThrough, start, today.slice(0, 7), start).all() : { results: [] };
   for (const { kind, reference, recipient } of jobs) {
     if (!budget.has(12)) break;
     const message = await buildControlMail(db, env, kind, reference, context);
@@ -1422,7 +1454,7 @@ async function claimGmailReport(env, context, now, requestId) {
     if (result.meta.changes && packed) return { id,claim,to:message.recipient,subject:message.subject,
       ...packedGmailBody(kind,null,packed,message.text,message.html,env) };
   }
-  const consultation = await claimQueuedGmailReport(db, env, now, requestId, budget, true);
+  const consultation = await claimQueuedGmailReport(db, env, now, requestId, budget, context, true);
   if (consultation) return consultation;
   return env.BUCKET ? null : await retryStorageHeldReport(env,context,now,requestId,budget);
 }
@@ -1480,6 +1512,19 @@ async function retryStorageHeldReport(env, context, now, requestId, budget) {
     await db.prepare(`UPDATE OR IGNORE report_mail SET payload_key=?,office_base_key=?,office_signal_id=?
       WHERE id=? AND canceled_at IS NULL AND ${storageHeldReport()}`).bind(key,baseKey,signalId,old.id).run();
     return null;
+  }
+  if (old.kind === 'completion' && old.requested_by === 'auto:approval') {
+    const claim = crypto.randomUUID();
+    const target = queuedMailRoute(old,env);
+    const restored = await db.prepare(`UPDATE report_mail SET recipient=?,sender=?,subject=?,body=?,html=?,
+      hold_at=NULL,lease_until=NULL,provider_id=?,claim_request_id=?,payload_key=NULL
+      WHERE id=? AND canceled_at IS NULL AND ${storageHeldReport()}
+        AND ?=(${target.sql}) AND ${availableGmailRequest}`)
+      .bind(payload.recipient,env.BONYEON_GMAIL_FROM,payload.subject,packed.text,packed.html,'gmail:'+claim,requestId,
+        old.id,payload.recipient,...target.args,requestId,requestId).run();
+    if (!restored.meta.changes) return null;
+    return { id:old.id,claim,to:payload.recipient,subject:payload.subject,
+      ...packedGmailBody(old.kind,null,packed,payload.text,payload.html,env) };
   }
   const cleared = await db.prepare(`UPDATE report_mail SET canceled_at=?
     WHERE id=? AND canceled_at IS NULL AND ${storageHeldReport()}`).bind(now.toISOString(),old.id).run();

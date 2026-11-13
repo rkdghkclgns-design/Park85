@@ -43,11 +43,15 @@ async function harness(start = today) {
   await runner('activate');
   await db.prepare("INSERT INTO work_sites(id,name,address,lat,lng,status,updated_at,due_date) VALUES ('site','테스트 현장','예시 주소',37,127,'pending',?,?)")
     .bind(stamp,today).run();
-  const seedReport = (id,workDate,notes='',status='submitted',completion=null) => db.prepare(`
+  const seedReport = async (id,workDate,notes='',status='submitted',completion=null) => {
+    await db.prepare(`
     INSERT INTO field_reports(id,site_id,work_date,author_id,author_name,site_name,site_address,
       units,exterior,interior,notes,status,updated_at,completion_reported_at,contract_price,worker_price)
     VALUES (?,'site',?,'worker','테스트 작업자','테스트 현장','예시 주소',1,1,0,?,?,?, ?,20000,10000)
   `).bind(id,workDate,notes,status,stamp,completion).run();
+    if (completion) await db.prepare("UPDATE field_reports SET status='approved',approved_at=? WHERE id=?")
+      .bind(stamp,id).run();
+  };
   return { db,env,runner,seedReport,queryCount:()=>queries,resetBudget(limit=50){ queries=0;ceiling=limit; } };
 }
 
