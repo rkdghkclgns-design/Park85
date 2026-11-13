@@ -1,6 +1,14 @@
 import { motion } from "motion/react";
 import { Facebook, Instagram, Youtube, Mail, Phone, MapPin, Send } from "lucide-react";
 import { Button } from "./ui/button";
+import { Link } from "react-router-dom";
+
+const quickLinks=[
+    {label:"서비스 소개",to:"/?section=section-services"},
+    {label:"이용 방법",to:"/?section=section-how-it-works"},
+    {label:"고객 후기",to:"/?section=section-testimonials"},
+];
+const helpLinks=[{label:"자주 묻는 질문",to:"/help?section=help-faq"},{label:"이용 가이드",to:"/help?section=help-guide"}];
 
 export function Footer() {
     return (
@@ -39,19 +47,14 @@ export function Footer() {
                     >
                         <h4 className="text-white text-lg font-bold mb-4">빠른 링크</h4>
                         <ul className="space-y-3">
-                            {[
-                                "서비스 소개",
-                                "이용 방법",
-                                "고객 후기",
-                            ].map((link, idx) => (
-                                <li key={link}>
-                                    <motion.a
-                                        href="javascript:void(0)"
-                                        whileHover={{ x: 5, color: "#3B82F6" }}
+                            {quickLinks.map(link => (
+                                <li key={link.to}>
+                                    <Link
+                                        to={link.to}
                                         className="hover:text-blue-400 transition-all inline-block"
                                     >
-                                        {link}
-                                    </motion.a>
+                                        {link.label}
+                                    </Link>
                                 </li>
                             ))}
                         </ul>
@@ -66,18 +69,14 @@ export function Footer() {
                     >
                         <h4 className="text-white text-lg font-bold mb-4">고객 지원</h4>
                         <ul className="space-y-3">
-                            {[
-                                "자주 묻는 질문",
-                                "이용 가이드",
-                            ].map((link, idx) => (
-                                <li key={link}>
-                                    <motion.a
-                                        href="javascript:void(0)"
-                                        whileHover={{ x: 5, color: "#3B82F6" }}
+                            {helpLinks.map(link => (
+                                <li key={link.to}>
+                                    <Link
+                                        to={link.to}
                                         className="hover:text-blue-400 transition-all inline-block"
                                     >
-                                        {link}
-                                    </motion.a>
+                                        {link.label}
+                                    </Link>
                                 </li>
                             ))}
                         </ul>

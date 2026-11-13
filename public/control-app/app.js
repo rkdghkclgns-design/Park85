@@ -3,10 +3,11 @@ import { addAccount, defaultZones, deriveSecret, emptyWorkspace, getAccount, get
 import { badge, blankPair, brand, company, duration, empty, esc, icon, listReports, metric, monthName, reportDate, stats, timeText, today } from './ui.js';
 import { blankIssue, newReport, reportDetail, reportError, reportForm, reportRow } from './reports.js';
 import { blankRequest, monthlyReport, newMonthly } from './monthly.js';
-import { mountOperations, operationsAuth, operationsPage, operationsSession, roleNames, workModeKey } from './operations.js';
+import { mountOperations, operationsAuth, operationsPage, operationsRequest, operationsSession, roleNames, workModeKey } from './operations.js';
 import { renderSignup } from './signup.js';
 import { installFormGuidance } from './form-guidance.js';
 import { readPhotoQueue } from './photo-queue.js';
+import { startPhotoSync,stopPhotoSync } from './photo-sync.js';
 import { browserWorkspaceExport, isLegacyRoute, navigationItems, resolveNavigationRoute } from './navigation.js';
 
 const app = document.querySelector('#app');
@@ -23,6 +24,18 @@ if (independentPortal && !verification && 'serviceWorker' in navigator) {
   });
 }
 const account = await operationsSession();
+const photoTransfer=['owner','admin','cleaner'].includes(account.role)
+  ? startPhotoSync({owner:location.pathname+':'+account.id,api:operationsRequest}) : null;
+function showPhotoTransfer() {
+  const panel=app.querySelector('[data-global-photo-status]');
+  if(!panel || !photoTransfer)return;
+  const state=photoTransfer.snapshot();
+  panel.hidden=!state.pending.length && !state.error;
+  panel.querySelector('[data-global-photo-text]').textContent=state.error ||
+    `사진 ${state.pending.length}장 기기 보관 · ${state.transmitting ? '전송 중' : navigator.onLine ? '자동 전송 대기' : '오프라인 · 연결되면 자동 전송'}${state.pending.some(photo=>photo.error) ? ' · 확인이 필요한 사진 있음' : ''}`;
+  const retry=panel.querySelector('button');retry.disabled=!navigator.onLine || state.syncing;
+}
+photoTransfer?.subscribe(showPhotoTransfer);
 const recoveryKey = 'bonyeon-recovery-id';
 if (independentPortal && !verification && !account.connectionUnavailable) {
   if (account.signedIn && account.id) sessionStorage.setItem(recoveryKey,account.id);
@@ -300,10 +313,11 @@ function render({ keepScroll = false } = {}) {
       <div class="sidebar-user"><strong>${role}</strong><p class="muted">${esc(account.name || '본연')}</p>${accountButton}</div>
     </aside>
     <header class="topbar"><div class="shell">${brand('본연', role)}${accountButton}</div></header>
-    <main class="main"><div class="shell">${verificationBanner()}${body}</div></main>
+    <main class="main"><div class="shell">${verificationBanner()}${photoTransfer ? '<aside class="card ops-upload row between" data-global-photo-status role="status" hidden><span data-global-photo-text></span><button class="btn compact" type="button" data-action="retry-photo-uploads">대기 사진 다시 보내기</button></aside>' : ''}${body}</div></main>
     <nav class="bottomnav" aria-label="주 메뉴"><div class="shell">${menu(true)}</div></nav>
   </div>`;
   stopOperations = mountOperations(document.querySelector('#operations'), route, account);
+  showPhotoTransfer();
   window.scrollTo(0, scroll);
 }
 
@@ -467,6 +481,7 @@ const actions = {
   logout: signOut,
   'native-logout': async () => {
     await operationsAuth('logout');
+    stopPhotoSync();
     sessionStorage.removeItem(sessionKey);
     sessionStorage.removeItem(workModeKey);
     location.reload();
@@ -475,10 +490,12 @@ const actions = {
     if (!account.canSwitchMode) return;
     if (account.role === 'cleaner') sessionStorage.removeItem(workModeKey);
     else sessionStorage.setItem(workModeKey,'cleaner');
+    stopPhotoSync();
     history.replaceState(null,'',location.pathname + '#control');
     location.reload();
   },
-  'verification-logout': async () => { await verificationRequest('logout', {}); location.reload(); },
+  'verification-logout': async () => { await verificationRequest('logout', {});stopPhotoSync();location.reload(); },
+  'retry-photo-uploads':()=>photoTransfer?.sync({retry:true}),
   'export-browser-data': () => {
     const payload=browserWorkspaceExport(workspace,{workspaceKey:user,exportedAt:new Date().toISOString()});
     const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'}));

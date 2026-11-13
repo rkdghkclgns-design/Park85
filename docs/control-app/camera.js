@@ -1,6 +1,7 @@
 import { privateImage } from './portal-api.js';
 import { esc } from './ui.js';
 import { readPhotoQueue, writeQueuedPhoto, removeQueuedPhoto } from './photo-queue.js';
+import { startPhotoSync } from './photo-sync.js';
 import { clearFieldIssue, focusFieldIssue } from './form-guidance.js';
 
 const cameraLabels = {
@@ -87,6 +88,7 @@ export function mountCamera(evidence, api, signal, notify, onModeChange, userId,
   let syncing = false;
   let confirmed = 0;
   const owner = location.pathname + ':' + userId;
+  const transfer=startPhotoSync({owner,api});
   const serverDrafts = new Map();
   const recoverable = new Map();
   const zoneCache = new Map();
@@ -137,47 +139,8 @@ export function mountCamera(evidence, api, signal, notify, onModeChange, userId,
   }
 
   async function syncQueue({ retry = false } = {}) {
-    if (syncing || !navigator.onLine || signal.aborted) return;
-    syncing = true;
-    try {
-      await refreshQueue();
-      for (const photo of pending) {
-        if (!navigator.onLine || signal.aborted) break;
-        if (photo.error && !retry) continue;
-        transmitting = photo.id;
-        renderQueue();
-        const payload = new FormData();
-        for (const [key, value] of Object.entries({ ...photo.fields, slot: photo.slot, uploadId: photo.id })) payload.set(key, value);
-        payload.set('photo', photo.blob, '촬영.jpg');
-        const upload = new AbortController();
-        const abortUpload = () => upload.abort();
-        const timeout = window.setTimeout(abortUpload, 15_000);
-        signal.addEventListener('abort', abortUpload, { once: true });
-        try {
-          const saved = await api('work/captures', { method: 'POST', body: payload, signal: upload.signal });
-          if (!saved.id) throw new Error('서버 저장 응답을 확인할 수 없습니다.');
-          await removeQueuedPhoto(photo.id);
-          const key = draftKey(photo.fields);
-          const known = serverDrafts.get(key) || [];
-          if (!known.some(item => item.id === saved.id)) serverDrafts.set(key, [...known, saved]);
-          confirmed++;
-        } catch (error) {
-          if (signal.aborted) break;
-          if (![400, 403, 404, 409, 413, 507].includes(error.status)) break;
-          await writeQueuedPhoto({ ...photo, error: error.message });
-        } finally {
-          window.clearTimeout(timeout);
-          signal.removeEventListener('abort', abortUpload);
-          transmitting = '';
-          await refreshQueue();
-        }
-      }
-    } catch {
-      if (!signal.aborted) notify('기기에 보관한 사진을 읽지 못했습니다. 브라우저 저장 공간을 확인해 주세요.', true);
-    } finally {
-      syncing = false;
-      if (!signal.aborted) { renderQueue(); await refreshDrafts(); }
-    }
+    await transfer.sync({retry});
+    if(!signal.aborted){await refreshQueue();await refreshDrafts();}
   }
 
   function renderDrafts() {
@@ -217,7 +180,7 @@ export function mountCamera(evidence, api, signal, notify, onModeChange, userId,
     try {
       const data = await api('work/captures?' + new URLSearchParams(fields), { signal });
       if (!signal.aborted && token === latestDraft && draftKey(fields) === draftKey(context())) {
-        serverDrafts.set(draftKey(fields), data.captures);
+        serverDrafts.set(draftKey(fields), data.captures.length ? data.captures : data.registration?.photos || []);
         recoverable.set(draftKey(fields),data.inProgress || []);
         renderDrafts();
       }
@@ -386,6 +349,7 @@ export function mountCamera(evidence, api, signal, notify, onModeChange, userId,
       }
       if (button.dataset.removePending && !syncing) {
         await removeQueuedPhoto(button.dataset.removePending);
+        await transfer.refresh();
         await refreshQueue();
       }
       if (button.hasAttribute('data-add-zone') && !button.disabled) {
@@ -470,11 +434,17 @@ export function mountCamera(evidence, api, signal, notify, onModeChange, userId,
   for (const field of [evidence.elements.exterior, evidence.elements.interior]) field.addEventListener('change', renderDrafts, { signal });
   fileMode?.addEventListener('change', () => { updateMode(); refreshDrafts(); }, { signal });
   dialog.addEventListener('close', stop, { signal });
-  window.addEventListener('online', () => { renderQueue(); void syncQueue(); }, { signal });
-  window.addEventListener('offline', renderQueue, { signal });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) void syncQueue(); }, { signal });
-  const timer = window.setInterval(() => { if (pending.some(photo => !photo.error)) void syncQueue(); }, 20_000);
-  signal.addEventListener('abort', () => { stop(); window.clearInterval(timer); thumbnails.forEach(url => URL.revokeObjectURL(url)); }, { once: true });
+  const unsubscribe=transfer.subscribe((state,event)=>{
+    if(signal.aborted)return;
+    pending=state.pending;transmitting=state.transmitting;syncing=state.syncing;confirmed=state.confirmed;
+    if(event?.type==='uploaded') {
+      const key=draftKey(event.photo.fields),known=serverDrafts.get(key) || [];
+      if(!known.some(photo=>photo.id===event.saved.id))serverDrafts.set(key,[...known,event.saved]);
+    }
+    renderQueue();renderDrafts();
+    if(event?.type==='uploaded')void refreshDrafts();
+  });
+  signal.addEventListener('abort', () => { stop();unsubscribe();thumbnails.forEach(url => URL.revokeObjectURL(url)); }, { once: true });
   updateMode();
   void refreshQueue().then(() => { if (pending.length) void syncQueue(); }).catch(() => {
     if (!signal.aborted) evidence.querySelector('[data-camera-queue-status]').textContent = '이 기기에서 임시 저장 공간을 열지 못했습니다.';

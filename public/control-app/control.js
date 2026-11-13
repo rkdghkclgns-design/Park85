@@ -8,6 +8,7 @@ import { evidenceZoneBatchEditor, evidenceZoneEditor, evidenceZoneMoveMessage, m
 import { operationsTasksSection, mountOperationsTasks } from './analytics.js';
 import { focusFieldIssue } from './form-guidance.js';
 import { createReportAutosave } from './report-autosave.js';
+import { mailPreviewDocument } from './mail-preview.js';
 import { mailConsentState, workerEarningsMarkup } from './control-presentation.js';
 
 const reportStatuses = { submitted: '확인 대기', approved: '승인', revision: '보완 요청' };
@@ -67,7 +68,7 @@ export async function mountControlDetail(root, route, api, signal, movedZone) {
       }
       root.innerHTML='<section class="card ops-upload stack mail-preview"><h1>보관된 전체 보고 자료</h1><div class="row"><button class="btn compact" data-download-html>HTML 다운로드</button><button class="btn compact" data-download-text>텍스트 다운로드</button></div><iframe title="보관된 전체 보고 자료" sandbox></iframe><pre hidden></pre></section>';
       const {text:plain,html}=saved;
-      if (html) root.querySelector('iframe').srcdoc=html;
+      if (html) root.querySelector('iframe').srcdoc=mailPreviewDocument(html);
       else {
         root.querySelector('iframe').hidden=true;
         root.querySelector('pre').hidden=false;
@@ -94,7 +95,7 @@ export async function mountControlDetail(root, route, api, signal, movedZone) {
       root.innerHTML = `<header class="page-title"><h1>${data.kind === 'worker' ? '작업 배정·지급 상세' : '세무 비용 자료 상세'}</h1>
         <p>${esc(data.subject)}</p><p>${data.sentAt ? '발송' : '등록'} · ${date.format(new Date(stamp))}</p></header>
         <section class="card ops-upload stack mail-preview"><iframe title="발송 시점의 상세 내역" sandbox></iframe><pre hidden></pre></section>`;
-      if (data.html) root.querySelector('iframe').srcdoc = data.html;
+      if (data.html) root.querySelector('iframe').srcdoc = mailPreviewDocument(data.html);
       else {
         root.querySelector('iframe').hidden = true;
         const plain = root.querySelector('pre');
@@ -685,7 +686,7 @@ export function mountControl(root, account, api, signal) {
     plain.textContent = data.text;
     plain.hidden = Boolean(data.html);
     formatted.hidden = !data.html;
-    formatted.srcdoc = data.html || '';
+    formatted.srcdoc = mailPreviewDocument(data.html || '');
     const consent=mailBox.querySelector('[data-historical-consent]');
     const checkbox=mailBox.querySelector('[data-allow-historical]');
     checkbox.checked=false;consent.hidden=!data.requiresHistoricalConsent;

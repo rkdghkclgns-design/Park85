@@ -107,7 +107,7 @@ test('recurring assignments, private evidence, locked close, and scheduled mail 
   await request('work/evidence','POST',proof,worker,400);
   proof.set('safetyChecklist',JSON.stringify({ ...checklist,isolation:true }));
   const { id } = await request('work/evidence', 'POST', proof, worker, 201);
-  await request('work/evidence', 'POST', proof, worker, 409);
+  assert.equal((await request('work/evidence', 'POST', proof, worker, 201)).id,id);
   assert.equal(files.size, 4);
   const photoPath = 'work/photo?id=' + id + '&slot=interiorAfter';
   assert.equal((await call(photoPath, 'GET', undefined, viewer)).status, 403);
@@ -130,18 +130,23 @@ test('recurring assignments, private evidence, locked close, and scheduled mail 
   assert.equal(done.interior, 1);
   assert.ok(done.nextDue > now);
   assert.equal(done.reportWorker, '김 작업자');
+  await request('work/settlement/close', 'POST', { month: priorMonth },owner,409);
+  await request('work/settlement/payments','PATCH',{id:report.id,paymentVersion:0,billed:21000,vat:2000,
+    received:0,paid:0,billingRef:'T-1',workers:[{email:worker,units:1,paid:0,paidDate:''}]});
   await request('work/settlement/close', 'POST', { month: priorMonth });
   await request('control/report', 'POST', { ...field, siteId: 'pending' }, worker, 409);
   await request('work/settlement?month=' + priorMonth, 'GET', undefined, worker, 403);
-  await request('work/settlement/payments', 'PATCH', { id: report.id, paymentVersion:0, billed: 21000, received: 13000, paid: 9000, billingRef: 'T-1' }, owner, 409);
-  await request('work/settlement/payments', 'PATCH', { id: report.id, paymentVersion:0, billed: 21000, received: 13000, paid: 9000, billingRef: 'T-1', changeReason: '마감 후 첫 입금 확인' });
+  await request('work/settlement/payments', 'PATCH', { id: report.id, paymentVersion:1, billed: 21000, received: 13000, paid: 9000, billingRef: 'T-1',
+    workers:[{email:worker,units:1,paid:9000,paidDate:priorDay}] }, owner, 409);
+  await request('work/settlement/payments', 'PATCH', { id: report.id, paymentVersion:1, billed: 21000, received: 13000, paid: 9000, billingRef: 'T-1',
+    workers:[{email:worker,units:1,paid:9000,paidDate:priorDay}],changeReason: '마감 후 첫 입금 확인' });
   const workerPayment = { email: other, units: 1, paid: 7000, paidDate: priorDay };
-  const payment = { id: report.id, paymentVersion:1, billed: 21000, received: 13000, paid: 7000, vat: 2000, billingRef: 'T-1', changeReason: '실제 지급 내역 반영' };
+  const payment = { id: report.id, paymentVersion:2, billed: 21000, received: 13000, paid: 7000, vat: 2000, billingRef: 'T-1', changeReason: '실제 지급 내역 반영' };
   await request('work/settlement/payments', 'PATCH', { ...payment, vat: 22000 }, owner, 400);
   await request('work/settlement/payments', 'PATCH', { ...payment, workers: [{ ...workerPayment, units: 2 }] }, owner, 409);
   await request('work/settlement/payments', 'PATCH', { ...payment, workers: [workerPayment] });
-  await request('work/settlement/payments', 'PATCH', { ...payment, paymentVersion:2, billed:23000, workers:[workerPayment] }, owner, 409);
-  await request('work/settlement/payments', 'PATCH', { ...payment, paymentVersion:2, vat:2100, workers:[workerPayment] }, owner, 409);
+  await request('work/settlement/payments', 'PATCH', { ...payment, paymentVersion:3, billed:23000, workers:[workerPayment] }, owner, 409);
+  await request('work/settlement/payments', 'PATCH', { ...payment, paymentVersion:3, vat:2100, workers:[workerPayment] }, owner, 409);
   await request('work/evidence/classification', 'PATCH', { id, chargerType:'slow',canopy:'included' }, owner, 409);
   const ledger = await request('work/settlement?month=' + priorMonth);
   assert.ok(ledger.close.closedAt);
@@ -158,10 +163,10 @@ test('recurring assignments, private evidence, locked close, and scheduled mail 
   const settlement = await request('control/mail?kind=settlement&reference=' + priorMonth);
   assert.match(settlement.text, /월 마감 완료/);
   assert.match(settlement.text, /마감 당시 확정 금액/);
-  assert.match(settlement.text, /미수 0원/);
+  assert.match(settlement.text, /미수 21,000원/);
   assert.match(settlement.html, /공급가액/);
-  assert.match(settlement.html, /실제 작업자 미입력 승인 보고 1건/);
-  assert.doesNotMatch(settlement.html, /19,000원|이 작업자|7,000원/);
+  assert.match(settlement.html, /김 작업자/);
+  assert.doesNotMatch(settlement.html, /이 작업자|7,000원/);
   assert.match(settlement.html, /급속 충전기/);
   const daily = await request('control/mail?kind=daily&reference=' + priorDay);
   assert.match(daily.html, /TEST-01/);

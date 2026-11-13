@@ -30,6 +30,8 @@ async function api(path, { method = 'GET', body, signal } = {}) {
   return payload;
 }
 
+export {api as operationsRequest};
+
 export async function operationsSession() {
   try {
     return await api('session', { signal: AbortSignal.timeout(5000) });

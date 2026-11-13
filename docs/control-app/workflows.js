@@ -206,7 +206,7 @@ function ledgerRows(model, month, today) {
   let vatRecorded = false;
   let unresolved = model.rows.length - approved.length;
   for (const row of approved) {
-    if (row.contractPrice == null || (row.workerPrice == null && row.internalUnits < row.units)) unresolved++;
+    if (row.closeBlocked ?? (row.contractPrice == null || (row.workerPrice == null && row.internalUnits < row.units))) unresolved++;
     const units = BigInt(row.units);
     totals.contract += row.contractPrice == null ? 0n : units * BigInt(row.contractPrice);
     totals.labor += row.workerPrice == null ? 0n : BigInt(row.units-row.internalUnits) * BigInt(row.workerPrice);
@@ -224,7 +224,7 @@ function ledgerRows(model, month, today) {
     ['고객 청구 합계', totals.billed], ['입금 / 미수', money(totals.received) + ' / ' + money(totals.billed - totals.received)],
     ['작업자 지급 / 정산 차액', money(totals.paid) + ' / ' + money(totals.labor - totals.paid)]];
   const status = model.close ? `마감 완료 · ${new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeZone: 'Asia/Seoul' }).format(new Date(model.close.closedAt))} · ${esc(model.close.closedBy)}`
-    : `마감 전 · 미승인·단가 미확정 ${unresolved}건`;
+    : `마감 전 · 필수 확인 ${unresolved}건 (승인·단가·청구·부가세·작업자 배분·지급일)`;
   const checks = settlementReview(model);
   return `<p class="small"><strong>${status}</strong></p>
     <dl class="ledger-summary">${summary.map(([title, value]) =>
@@ -235,7 +235,7 @@ function ledgerRows(model, month, today) {
       ? '<div><button type="button" class="btn primary" data-close-ledger>이 달 결산 마감</button></div>' : ''}
     ${approved.length ? approved.map(row => {
       const subtotal = (price,count=row.units) => !count ? '0원' : price == null ? '단가 미확정' : money(BigInt(count) * BigInt(price));
-      const billingLocked = model.close && row.paymentVersion ? 'readonly' : '';
+      const billingLocked = model.close ? 'readonly' : '';
       return `<details class="report-control-row" data-ledger-report="${esc(row.id)}"><summary><strong>${esc(row.siteName)} · ${esc(row.workDate)}</strong><span class="small muted"> · ${esc(row.authorName)} · ${row.units}기</span></summary>
         <div class="stack work-details">
           <p class="small">계약 ${subtotal(row.contractPrice)} · 작업자 정산 ${subtotal(row.workerPrice,row.units-row.internalUnits)} · 미수 ${money(BigInt(row.billed) - BigInt(row.received))}

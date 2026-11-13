@@ -17,6 +17,8 @@ export function settlementReview(model) {
       if (row.vat == null) flags.push('부가세 미입력');
       if (row.billed > row.received) flags.push('미수 ' + (row.billed - row.received).toLocaleString('ko-KR') + '원');
       if (!row.workerBreakdown.length && !row.internalWork) flags.push('실제 작업자별 지급 내역 미입력');
+      if (row.workerBreakdown.some(worker=>worker.paid>0 && !worker.paidDate)) flags.push('작업자 지급일 미입력');
+      if (row.closeBlocked && !flags.length) flags.push('마감 필수 금액·작업자 수량 배분 확인');
       if (row.workerPrice != null && payable(row) !== BigInt(row.paid)) {
         const difference = payable(row) - BigInt(row.paid);
         flags.push((difference > 0n ? '미지급 ' : '초과 지급 ') + (difference < 0n ? -difference : difference).toLocaleString('ko-KR') + '원');

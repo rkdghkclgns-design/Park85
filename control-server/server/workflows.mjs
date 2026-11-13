@@ -1,5 +1,5 @@
 import { displayWorkResults, normalizeWorkResults } from './work-results.mjs';
-import { cameraPhotoKey, handleCameraWork, readCaptureSelection, validateProofJpeg, validateWorkZone } from './camera.mjs';
+import { cameraPhotoKey, captureSelectionIds, handleCameraWork, readCaptureSelection, validateProofJpeg, validateWorkZone } from './camera.mjs';
 import { internalWorkUnits, readWorkCompletion, workerCanMoveEvidenceZone } from './progress.mjs';
 
 const photoSlots = ['exteriorBefore', 'exteriorAfter', 'interiorBefore', 'interiorAfter'];
@@ -186,20 +186,52 @@ async function saveWorkEvidence(request, env, account, admin, context) {
     || !chargerTypes.includes(chargerType) || !canopyScopes.includes(canopy) || !workResults) {
     throw new HttpError(400, '현장, 작업일, 충전기 식별 코드, 청소 범위와 안전 점검을 확인해 주세요.');
   }
+  const priorRegistration=await db.prepare('SELECT 1 FROM charger_evidence WHERE site_id=? AND work_date=? AND asset_code=? AND author_id=?')
+    .bind(siteId,workDate,assetCode,account.id).first();
+  let guidance=null;
+  if(!priorRegistration) {
   const canSubmit = await db.prepare(`
     SELECT w.id FROM work_sites w WHERE w.id = ?
       AND (? OR EXISTS (SELECT 1 FROM work_plans p WHERE p.site_id = w.id AND p.worker_email = ?))
   `).bind(siteId, Number(admin), account.email).first();
   if (!canSubmit) throw new HttpError(403, '배정받은 현장에만 작업 증빙을 등록할 수 있습니다.');
-  const guidance = admin ? null : await siteGuidance(db,siteId,account,context);
+  guidance = admin ? null : await siteGuidance(db,siteId,account,context);
   if (guidance && !guidance.confirmedAt) throw new HttpError(409, '현장의 최신 청소 안내를 먼저 확인해 주세요.');
+  }
   const safetyChecklist = admin ? {} : readGuidedChecklist(form,interior,HttpError);
-  const zoneId = await validateWorkZone(db, siteId, form.get('zoneId'), HttpError);
+  const zoneId=cleanText(form.get('zoneId')) || null;
   const activeSlots = photoSlots.filter(slot => slot.startsWith('exterior') ? exterior : interior);
   const usesCamera = !env.BONYEON_VERIFICATION_MODE || form.has('captureIds');
-  const captured = usesCamera ? await readCaptureSelection(db, form.get('captureIds'), [siteId, workDate, assetCode, zoneId, account.id], activeSlots, HttpError) : [];
+  const captured = usesCamera ? captureSelectionIds(form.get('captureIds'),HttpError) : [];
   const photos = [];
   if (!usesCamera) for (const slot of activeSlots) photos.push([slot, await validateProofJpeg(form.get(slot), HttpError, env.JPEG_VALIDATE)]);
+  const digest=async value=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',value)),byte=>byte.toString(16).padStart(2,'0')).join('');
+  const fileHashes=await Promise.all(photos.map(async([slot,bytes])=>[slot,await digest(bytes)]));
+  const signature=(values)=>JSON.stringify([siteId,workDate,assetCode,account.id,...values]);
+  const internalWork=Number(account.role==='cleaner' && account.canSwitchMode===true);
+  const requestText=signature([zoneId,Number(exterior),Number(interior),issue,chargerType,canopy,workResults,safetyChecklist,
+    internalWork,captured.toSorted(),fileHashes]);
+  const submissionHash=await digest(new TextEncoder().encode(requestText));
+  async function registered() {
+    const previous=await db.prepare('SELECT * FROM charger_evidence WHERE site_id=? AND work_date=? AND asset_code=? AND author_id=?')
+      .bind(siteId,workDate,assetCode,account.id).first();
+    if (!previous) return null;
+    const legacy=previous.submission_hash===null && usesCamera && signature([previous.zone_id,previous.exterior,previous.interior,
+      previous.issue,previous.charger_type,previous.canopy,normalizeWorkResults(JSON.parse(previous.result_detail)),JSON.parse(previous.safety_checklist),
+      previous.internal_work,JSON.parse(previous.capture_ids).toSorted(),[]])===requestText;
+    if (previous.submission_hash!==submissionHash && !legacy) throw new HttpError(409,'이미 저장된 충전기입니다. 등록 내용이 달라 다시 저장할 수 없습니다. 작업 이력에서 저장된 증빙을 확인해 주세요.');
+    return previous.id;
+  }
+  const existing=await registered();
+  if (existing) return existing;
+  await validateWorkZone(db,siteId,zoneId,HttpError);
+  if (usesCamera) try {
+    await readCaptureSelection(db,form.get('captureIds'),[siteId,workDate,assetCode,zoneId,account.id],activeSlots,HttpError);
+  } catch(error) {
+    const concurrent=await registered();
+    if(concurrent)return concurrent;
+    throw error;
+  }
   const captureJson = JSON.stringify(captured);
   const id = crypto.randomUUID();
   try {
@@ -208,11 +240,11 @@ async function saveWorkEvidence(request, env, account, admin, context) {
     if (saved.some(item => item.status === 'rejected')) throw new HttpError(502, '증빙 사진을 저장하지 못했습니다.');
     const result = await db.prepare(`
       INSERT INTO charger_evidence (id, site_id, work_date, asset_code, author_id, author_name,
-                                    exterior, interior, safety_checked, issue, created_at, charger_type, canopy, result_detail, zone_id, capture_ids, history_actor,device_number,internal_work,safety_checklist)
+                                    exterior, interior, safety_checked, issue, created_at, charger_type, canopy, result_detail, zone_id, capture_ids, history_actor,device_number,internal_work,safety_checklist,submission_hash)
       SELECT ?, w.id, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?,
         CASE WHEN ? LIKE 'AUTO-%' THEN COALESCE(
           (SELECT device_number FROM charger_evidence WHERE site_id=w.id AND asset_code=? AND device_number IS NOT NULL LIMIT 1),
-          (SELECT COALESCE(MAX(device_number),0)+1 FROM charger_evidence WHERE site_id=w.id)) END,?,?
+          (SELECT COALESCE(MAX(device_number),0)+1 FROM charger_evidence WHERE site_id=w.id)) END,?,?,?
       FROM work_sites w LEFT JOIN work_progress g ON g.site_id=w.id
       LEFT JOIN work_plan_cycles cycle ON cycle.site_id=w.id WHERE w.id = ?
         AND (? OR EXISTS (SELECT 1 FROM work_plan_cycles p WHERE p.site_id=w.id AND p.worker_email=?
@@ -230,12 +262,19 @@ async function saveWorkEvidence(request, env, account, admin, context) {
       ON CONFLICT(site_id, work_date, asset_code) DO NOTHING
     `).bind(id, workDate, assetCode, account.id, account.name || '본연 작업자', Number(exterior),
       Number(interior), issue, nowIso(), chargerType, canopy, JSON.stringify(workResults), zoneId, captureJson, account.name || account.email,
-      assetCode,assetCode,Number(account.role==='cleaner' && account.canSwitchMode===true),JSON.stringify(safetyChecklist),
+      assetCode,assetCode,internalWork,JSON.stringify(safetyChecklist),submissionHash,
       siteId,Number(admin),account.email,guidance?.assignmentDue ?? null,guidance?.instructions ?? null,zoneId,zoneId,
       workDate,workDate,workDate,workDate,assetCode,workDate,workDate,captureJson,workDate,assetCode,zoneId,account.id,captured.length).run();
-    if (!result.meta.changes) throw new HttpError(409, '이미 등록된 충전기이거나, 승인·마감된 작업 또는 배정이 변경된 현장입니다.');
+    if (!result.meta.changes) {
+      const concurrent=await registered();
+      if (concurrent) {await Promise.allSettled(photos.map(([slot])=>bucket.delete(objectKey(id,slot))));return concurrent;}
+      throw new HttpError(409, '이미 등록된 충전기이거나, 승인·마감된 작업 또는 배정이 변경된 현장입니다.');
+    }
   } catch (error) {
-    await Promise.allSettled(photos.map(([slot]) => bucket.delete(objectKey(id, slot))));
+    const receipt=await db.prepare('SELECT submission_hash FROM charger_evidence WHERE id=? AND author_id=?')
+      .bind(id,account.id).first().catch(()=>undefined);
+    if (receipt?.submission_hash===submissionHash) return id;
+    if (receipt===null) await Promise.allSettled(photos.map(([slot]) => bucket.delete(objectKey(id, slot))));
     throw error;
   }
   return id;
@@ -329,6 +368,18 @@ async function updateWorkIssue(db, body, account, { HttpError }) {
   if (!result.meta.changes) throw new HttpError(404, '후속 조치가 필요한 이상 사항을 찾을 수 없습니다.');
 }
 
+const incompleteSettlement = `r.status<>'approved' OR r.contract_price IS NULL
+  OR (r.worker_price IS NULL AND r.units>r.internal_units) OR p.report_id IS NULL
+  OR (p.billed>0 AND p.vat IS NULL)
+  OR (json_array_length(p.worker_breakdown)=0 AND r.units>r.internal_units)
+  OR (json_array_length(p.worker_breakdown)>0 AND (
+    (SELECT SUM(json_extract(value,'$.units')) FROM json_each(p.worker_breakdown))<>r.units
+    OR (SELECT SUM(json_extract(value,'$.paid')) FROM json_each(p.worker_breakdown))<>p.paid
+    OR (SELECT COALESCE(SUM(CASE WHEN json_extract(value,'$.internal')=1 THEN json_extract(value,'$.units') ELSE 0 END),0)
+      FROM json_each(p.worker_breakdown))<>r.internal_units))
+  OR EXISTS(SELECT 1 FROM json_each(p.worker_breakdown)
+    WHERE json_extract(value,'$.paid')>0 AND COALESCE(json_extract(value,'$.paidDate'),'')='')`;
+
 async function readSettlementLedger(db, month, ownerEmail) {
   const close = await db.prepare('SELECT closed_at AS closedAt, closed_by AS closedBy FROM settlement_months WHERE month = ?')
     .bind(month).first();
@@ -339,7 +390,7 @@ async function readSettlementLedger(db, month, ownerEmail) {
            COALESCE(p.billing_ref, '') AS billingRef, COALESCE(p.note, '') AS note,
            p.vat, COALESCE(p.worker_breakdown, '[]') AS workerBreakdown,
            m.email AS reportWorkerEmail,m.name AS reportWorkerName,m.role AS reportWorkerRole,
-           COALESCE(p.payment_version, 0) AS paymentVersion
+            COALESCE(p.payment_version, 0) AS paymentVersion,(${incompleteSettlement}) AS closeBlocked
     FROM field_reports r LEFT JOIN settlement_payments p ON p.report_id = r.id
     LEFT JOIN members m ON m.user_id=r.author_id AND m.role IN ('cleaner','admin')
     WHERE r.work_date LIKE ? ORDER BY r.work_date, r.site_name, r.id
@@ -363,11 +414,11 @@ async function closeSettlement(db, month, account, { HttpError, koreaDate, valid
   const result = await db.prepare(`
     INSERT INTO settlement_months (month, closed_at, closed_by)
     SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM field_reports WHERE work_date LIKE ?)
-      AND NOT EXISTS (SELECT 1 FROM field_reports WHERE work_date LIKE ?
-                      AND (status <> 'approved' OR contract_price IS NULL OR (worker_price IS NULL AND units>internal_units)))
+      AND NOT EXISTS (SELECT 1 FROM field_reports r LEFT JOIN settlement_payments p ON p.report_id=r.id
+        WHERE r.work_date LIKE ? AND (${incompleteSettlement}))
     ON CONFLICT(month) DO NOTHING
   `).bind(month, nowIso(), account.name || account.email, month + '-%', month + '-%').run();
-  if (!result.meta.changes) throw new HttpError(409, '마감할 승인 건이 없거나, 미승인·단가 미확정 보고가 있거나, 이미 마감되었습니다.');
+  if (!result.meta.changes) throw new HttpError(409, '마감 전 승인·단가·청구 금액·부가세·실제 작업자 배분·지급일을 확인해 주세요. 금액이 없는 건도 0원으로 저장해야 합니다. 이미 마감된 달은 다시 마감할 수 없습니다.');
 }
 
 async function saveSettlementPayments(db, body, account, ownerEmail, { HttpError, validDate, koreaDate, emailAddress }) {
@@ -447,6 +498,12 @@ async function saveSettlementPayments(db, body, account, ownerEmail, { HttpError
       AND (? IS NULL OR internal_units = ?)
       AND ? = COALESCE((SELECT payment_version FROM settlement_payments WHERE report_id = field_reports.id), 0)
       AND (? <> '' OR NOT EXISTS (SELECT 1 FROM settlement_months WHERE month = substr(field_reports.work_date,1,7)))
+      AND (EXISTS(SELECT 1 FROM settlement_payments WHERE report_id=field_reports.id)
+        OR NOT EXISTS(SELECT 1 FROM settlement_months WHERE month=substr(field_reports.work_date,1,7))
+        OR EXISTS(SELECT 1 FROM settlement_snapshots s WHERE s.report_id=field_reports.id
+          AND s.month=substr(field_reports.work_date,1,7) AND json_extract(s.data,'$.billed')=?
+          AND COALESCE(json_extract(s.data,'$.billingRef'),'')=?
+          AND (?=0 OR json_extract(s.data,'$.vat') IS NULL OR json_extract(s.data,'$.vat') IS ?)))
     ON CONFLICT(report_id) DO UPDATE SET billed = excluded.billed, received = excluded.received,
       paid = excluded.paid, billing_ref = excluded.billing_ref, note = excluded.note, updated_at = excluded.updated_at,
       history_actor = excluded.history_actor, history_reason = excluded.history_reason,
@@ -460,7 +517,8 @@ async function saveSettlementPayments(db, body, account, ownerEmail, { HttpError
         OR (settlement_payments.billed=excluded.billed AND settlement_payments.billing_ref=excluded.billing_ref
           AND (?=0 OR settlement_payments.vat IS NULL OR settlement_payments.vat IS excluded.vat)))
   `).bind(billed, received, paid, billingRef, note, nowIso(), vat ?? null, breakdown, account.name || account.email, reason, id,paid,allocatedUnits,
-    allocatedUnits, allocatedInternal, allocatedInternal, expectedVersion, reason, Number(vat !== undefined), breakdown, breakdown,
+    allocatedUnits, allocatedInternal, allocatedInternal, expectedVersion, reason,billed,billingRef,Number(vat!==undefined),vat??null,
+    Number(vat !== undefined), breakdown, breakdown,
     Number(vat !== undefined), Number(vat !== undefined)).run();
   if (result.meta.changes) return;
   const saved = await db.prepare('SELECT payment_version AS version FROM settlement_payments WHERE report_id = ?').bind(id).first();

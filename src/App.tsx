@@ -16,6 +16,7 @@ import { ClientLogos } from "./components/ClientLogos";
 import { ScrollToTop } from "./components/ScrollToTop";
 import { ServiceDetail } from "./components/ServiceDetail";
 import { ControlPortal, controlPortalPath } from "./components/ControlPortal";
+import { Help } from "./components/Help";
 
 function HomePage() {
     return (
@@ -44,10 +45,15 @@ function HomePage() {
 }
 
 function RouteScrollToTop() {
-    const { pathname } = useLocation();
+    const { pathname,search } = useLocation();
     useEffect(() => {
-        window.scrollTo(0, 0);
-    }, [pathname]);
+        const section=new URLSearchParams(search).get("section") || "";
+        const target=/^[a-z][a-z0-9-]{0,80}$/.test(section) ? document.getElementById(section) : null;
+        if(target) {
+            window.scrollTo({top:Math.max(0,window.scrollY+target.getBoundingClientRect().top-112),behavior:"instant"});
+        }
+        else window.scrollTo({top:0,behavior:"instant"});
+    }, [pathname,search]);
     return null;
 }
 
@@ -62,6 +68,7 @@ export default function App() {
             <div className="h-px bg-gray-100 w-full" />
             <Routes>
                 <Route path="/" element={<HomePage />} />
+                <Route path="/help" element={<Help />} />
                 <Route path="/service/:categoryId/:serviceId" element={<ServiceDetail />} />
             </Routes>
             <Footer />

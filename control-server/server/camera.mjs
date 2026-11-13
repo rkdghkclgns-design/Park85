@@ -192,12 +192,17 @@ async function cameraContext(db, fields, account, admin, { HttpError, validDate,
   return [siteId, date, asset, zone, account.id];
 }
 
-export async function readCaptureSelection(db, raw, scope, slots, HttpError) {
+export function captureSelectionIds(raw,HttpError) {
   let ids;
   try { ids = JSON.parse(raw || '[]'); } catch { ids = null; }
   if (!Array.isArray(ids) || ids.length > 24 || new Set(ids).size !== ids.length || ids.some(id => !cameraUuid(id))) {
     throw new HttpError(400, '등록할 사진을 다시 확인해 주세요.');
   }
+  return ids;
+}
+
+export async function readCaptureSelection(db, raw, scope, slots, HttpError) {
+  const ids=captureSelectionIds(raw,HttpError);
   const { results } = await db.prepare(`
     SELECT id, slot FROM work_camera_photos
     WHERE site_id = ? AND work_date = ? AND asset_code = ? AND zone_id IS ? AND author_id = ?
@@ -255,7 +260,14 @@ export async function handleCameraWork(path, request, env, account, admin, conte
       WHERE site_id=? AND work_date=? AND zone_id IS ? AND author_id=? AND asset_code<>? AND evidence_id IS NULL
       GROUP BY asset_code ORDER BY MAX(created_at) DESC LIMIT 20
     `).bind(site,date,zone,author,asset).all();
-    return json({ captures: results, inProgress });
+    const registration=await db.prepare(`SELECT id FROM charger_evidence
+      WHERE site_id=? AND work_date=? AND asset_code=? AND author_id=?`).bind(site,date,asset,author).first();
+    if (registration) {
+      const {results:photos}=await db.prepare('SELECT id,slot,created_at AS createdAt FROM work_camera_photos WHERE evidence_id=? AND author_id=? ORDER BY created_at,id')
+        .bind(registration.id,author).all();
+      registration.photos=photos;
+    }
+    return json({ captures: results, inProgress,registration });
   }
   if (path === '/api/work/captures' && method === 'POST') {
     if (!env.BUCKET) throw new HttpError(503, '증빙 사진 저장소를 확인해 주세요.');
