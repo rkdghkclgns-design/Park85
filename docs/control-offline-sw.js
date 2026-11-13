@@ -1,4 +1,4 @@
-const cacheName = 'bonyeon-control-shell-v6';
+const cacheName = 'bonyeon-control-shell-v7';
 const files = [
   '', 'index.html', 'styles.css', 'app.js', 'portal-api.js', 'store.js', 'ui.js', 'reports.js', 'monthly.js',
   'operations.js', 'signup.js', 'form-guidance.js', 'regions.js', 'control.js', 'analytics.js', 'workflows.js',

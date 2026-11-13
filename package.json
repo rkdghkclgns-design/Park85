@@ -57,7 +57,7 @@
     "react-popper": "2.3.0",
     "react-resizable-panels": "2.1.7",
     "react-responsive-masonry": "2.7.1",
-    "react-router-dom": "^7.13.1",
+    "react-router-dom": "7.18.2",
     "react-slick": "0.31.0",
     "recharts": "2.15.2",
     "slick-carousel": "^1.8.1",
@@ -78,12 +78,12 @@
     "tailwindcss": "4.1.12",
     "terser": "^5.44.1",
     "typescript": "^5.9.3",
-    "vite": "6.3.5",
+    "vite": "6.4.6",
     "vite-plugin-singlefile": "^2.3.0"
   },
   "pnpm": {
     "overrides": {
-      "vite": "6.3.5"
+      "vite": "6.4.6"
     }
   }
 }

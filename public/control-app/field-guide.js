@@ -9,6 +9,7 @@ const headings = {
   saved: [5,'충전기 증빙 저장 완료'], report: [6,'작업 완료 보고'],
 };
 const previous = { list:'home', site:'list', setup:'site', before:'setup', after:'before', results:'after', saved:'site', report:'site', history:'home' };
+const evidenceSteps = new Set(['setup','before','after','results']);
 const guideAction = (id,label,primary=false) => `<button type="button" class="btn ${primary ? 'primary' : 'compact'}" data-guide-action="${id}">${label}</button>`;
 
 export function fieldGuidePage(paymentLink) {
@@ -92,6 +93,12 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
   function remember() {
     if (restoring || resumeAfterGuidance || !site || !['site','setup','before','after','results','saved','report'].includes(step)) return;
     const proof=workflow.draft.snapshot();
+    if (evidenceSteps.has(step) && proof.siteId===site.id) {
+      // Date edits belong to the current device, including when a worker
+      // records an earlier visit. Keep the last valid recovery while editing.
+      if (!recoveryMatches(proof,site,today)) return;
+      workDate=proof.workDate;
+    }
     const stored=recovery.save({siteId:site.id,assignmentDue:site.nextDue,workDate,step,guidanceVersion:guidance?.version || '',
       proof:proof.siteId===site.id && proof.workDate===workDate ? proof : null});
     if (!stored) notify('진행 단계 저장에 실패했습니다. 현재 화면을 유지하고 기기 저장 공간을 확인해 주세요.',true);
@@ -166,8 +173,8 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
       ${!required && !backTo && hasEvidence ? guideAction('report','저장된 증빙으로 완료 보고') : ''}</div>` : ''}`;
   }
 
-  async function selectSite(siteId,date=today,resumeReport=false) {
-    if (!restoring) resumeAfterGuidance=undefined;
+  async function selectSite(siteId,date=today,resumeReport=false,resume) {
+    if (!restoring) resumeAfterGuidance=resume;
     const next = sites.find(row=>row.id===siteId);
     if (!next) throw new Error('배정된 현장을 찾을 수 없습니다. 현장 목록을 새로고침해 주세요.');
     const token = ++attempt;
@@ -175,7 +182,7 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
     workDate=date;
     intendedReport=resumeReport;
     guidance=null;
-    backTo=null;
+    backTo=resume?.step || null;
     drawSite();
     show('site');
     try {
@@ -185,6 +192,7 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
       if (signal.aborted || token!==attempt || step!=='site') return;
       guidance=info;
       if (info.confirmedAt) confirmations.set(key,info);
+      else confirmations.delete(key);
       drawSite();
       if (resumeReport && info.confirmedAt) await openReport();
     } catch (error) {
@@ -197,34 +205,46 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
   }
 
   async function startInspection() {
+    const token=attempt,selectedSite=site,selectedDate=workDate;
     await workflow.setEvidenceSite(site.id,workDate);
+    if (signal.aborted || token!==attempt || site?.id!==selectedSite.id
+      || site.nextDue!==selectedSite.nextDue || workDate!==selectedDate) return;
     show('setup');
   }
 
   async function restoreWork() {
     if (restoreAttempted || !loaded || signal.aborted) return;
     restoreAttempted=true;
-    const saved=recovery.read() || (()=>{
-      const proof=workflow.draft.resume();
-      return proof ? {...proof,step:'setup',proof} : null;
-    })();
+    const latestProof=workflow.draft.resume();
+    let saved=recovery.read() || (latestProof ? {...latestProof,step:'setup',proof:latestProof} : null);
     if (!saved) return;
     const target=sites.find(row=>row.id===saved.siteId);
+    // Older flows could store a stale day and null proof after a date edit.
+    // Repair only from the preserved device draft for this same assignment.
+    if (!saved.proof && evidenceSteps.has(saved.step) && latestProof?.siteId===saved.siteId
+      && latestProof.assignmentDue===saved.assignmentDue && recoveryMatches(latestProof,target,today)) {
+      saved={...saved,workDate:latestProof.workDate,proof:latestProof};
+    }
     if (!recoveryMatches(saved,target,today) || target.currentReportStatus==='submitted') {
       recovery.clear();
       return;
     }
+    resumeAfterGuidance=saved;
     restoring=true;
     working=true;
     try {
-      await selectSite(saved.siteId,saved.workDate);
+      await selectSite(saved.siteId,saved.workDate,false,saved);
       if (signal.aborted || site?.id!==saved.siteId) return;
       if (!guidance?.confirmedAt) {
-        resumeAfterGuidance=saved;
         notify('저장한 현장 입력이 있습니다. 최신 현장 안내를 먼저 확인해 주세요.');
         return;
       }
+      const token=attempt;
       await restoreSavedStep(saved,target);
+      if (!signal.aborted && token===attempt && resumeAfterGuidance===saved) {
+        resumeAfterGuidance=undefined;
+        backTo=null;
+      }
     } catch (error) {
       if (!signal.aborted) notify(error.message,true);
     } finally {
@@ -237,9 +257,11 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
   async function restoreSavedStep(saved,target) {
     if (!recoveryMatches(saved,target,today) || !guidance?.confirmedAt) return;
     if (saved.step==='report' || saved.step==='saved') { await openReport();return; }
+    const token=attempt;
     const proof=saved.proof;
-    if (!proof || !recoveryMatches(proof,target,today) || !await workflow.restoreDraft(proof)) {
-      if (signal.aborted) return;
+    const restored=proof && recoveryMatches(proof,target,today) && await workflow.restoreDraft(proof);
+    if (signal.aborted || token!==attempt || !recoveryMatches(saved,site,today)) return;
+    if (!restored) {
       await startInspection();
       notify('저장된 작업 구역을 확인해 주세요. 기존 사진은 촬영 목록에 보관되어 있습니다.');
       return;
@@ -253,7 +275,10 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
 
   async function openReport() {
     if (!guidance?.confirmedAt) return;
+    const token=attempt,selectedSite=site,selectedDate=workDate;
     const data = await prefillCompletion(site.id,workDate,{ reveal:false });
+    if (signal.aborted || token!==attempt || site?.id!==selectedSite.id
+      || site.nextDue!==selectedSite.nextDue || workDate!==selectedDate) return;
     if (!data?.units) {
       notify('저장된 충전기 증빙이 없습니다. 안전 점검부터 진행해 주세요.',true);
       await startInspection();
@@ -271,6 +296,13 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
     return false;
   }
 
+  function rereadGuidance() {
+    remember();
+    const saved=resumeAfterGuidance || recovery.read();
+    const resume=saved?.siteId===site?.id && recoveryMatches(saved,site,today) ? saved : undefined;
+    return selectSite(site.id,workDate,false,resume);
+  }
+
   const actions = {
     home() { attempt++; show('home'); },
     list() { show('list'); },
@@ -280,8 +312,8 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
       attempt++;
       show(previous[step]);
     },
-    'retry-site'() { return selectSite(site.id,workDate,intendedReport); },
-    reread() { backTo=step; drawSite(); show('site'); },
+    'retry-site'() { return selectSite(site.id,workDate,intendedReport,resumeAfterGuidance); },
+    reread:rereadGuidance,
     async continue() {
       if (!guidance.confirmedAt) {
         const checkbox = sitePanel.querySelector('[data-guide-confirm]');
@@ -289,20 +321,31 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
           focusFieldIssue(checkbox,'현장 안내와 청소 방법을 확인해 주세요.');
           return;
         }
+        const token=attempt,selectedSite=site;
+        const { version,assignmentDue } = guidance;
+        const current=()=>!signal.aborted && token===attempt && site?.id===selectedSite.id
+          && site.nextDue===selectedSite.nextDue && guidance?.version===version;
         try {
-          const { version,assignmentDue } = guidance;
-          guidance=await api('work/guidance',{ method:'PUT',body:{ siteId:site.id,version,assignmentDue,confirmed:true },signal });
+          const confirmed=await api('work/guidance',{ method:'PUT',body:{ siteId:site.id,version,assignmentDue,confirmed:true },signal });
+          if (!current()) return;
+          guidance=confirmed;
           confirmations.set(site.id + ':' + guidance.assignmentDue,guidance);
           drawSite();
         } catch (error) {
-          if (error.status===409) await selectSite(site.id,workDate,intendedReport);
+          if (!current()) return;
+          if (error.status===409) await selectSite(site.id,workDate,intendedReport,resumeAfterGuidance);
           throw error;
         }
       }
       if (resumeAfterGuidance) {
         const saved=resumeAfterGuidance;
-        resumeAfterGuidance=undefined;
+        const token=attempt;
         await restoreSavedStep(saved,site);
+        if (!signal.aborted && token===attempt && resumeAfterGuidance===saved) {
+          resumeAfterGuidance=undefined;
+          backTo=null;
+        }
+        remember();
       } else if (backTo) {
         const next=backTo;
         backTo=null;
@@ -371,8 +414,17 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
       if (updated) {
         const changed = updated.delayReason!==site.delayReason || updated.progressUnits!==site.progressUnits
           || updated.currentReportStatus!==site.currentReportStatus;
+        const knownInstructions=guidance?.instructions ?? (site.instructions || site.siteNote || '');
+        const guidanceChanged=knownInstructions!==(updated.instructions || updated.siteNote || '');
         site=updated;
-        if (changed && step==='site') drawSite();
+        if (guidanceChanged) {
+          confirmations.delete(site.id+':'+site.nextDue);
+          if (evidenceSteps.has(step) || ['saved','report'].includes(step) || (step==='site' && resumeAfterGuidance)) {
+            void rereadGuidance().catch(error=>{if(!signal.aborted)notify(error.message,true);});
+          } else if (step==='site') {
+            void selectSite(site.id,workDate,intendedReport).catch(error=>{if(!signal.aborted)notify(error.message,true);});
+          } else guidance=null;
+        } else if (changed && step==='site') drawSite();
       }
     },
     canSave(data) {

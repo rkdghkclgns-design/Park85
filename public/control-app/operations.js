@@ -111,7 +111,12 @@ const uploadStatuses = new Map([
 const cellText = value => String(value ?? '').trim();
 const fieldKey = value => cellText(value).replace(/[\s_\uFEFF]+/g, '').toLowerCase();
 
-function formatDate(value) {
+function formatDate(value, { xlsx, date1904 = false } = {}) {
+  if (typeof value === 'number') {
+    const parts = Number.isFinite(value) ? xlsx?.SSF?.parse_date_code(value, { date1904 }) : null;
+    if (!parts) return null;
+    value = [String(parts.y).padStart(4, '0'), String(parts.m).padStart(2, '0'), String(parts.d).padStart(2, '0')].join('-');
+  }
   const text = cellText(value);
   if (!text) return '';
   const match = /^(\d{4})[-./]\s*(\d{1,2})[-./]\s*(\d{1,2})\.?$/.exec(text);
@@ -137,7 +142,8 @@ async function parseUpload(file) {
       catch { text = new TextDecoder('euc-kr').decode(bytes); }
       workbook = xlsx.read(text, { type: 'string', raw: true, sheetRows: 1002 });
     } else {
-      workbook = xlsx.read(bytes, { cellDates: true, sheetRows: 1002 });
+      // Keep serial dates numeric so their calendar day never depends on the browser time zone.
+      workbook = xlsx.read(bytes, { cellDates: false, sheetRows: 1002 });
     }
   } catch {
     throw new Error('파일을 읽을 수 없습니다. 양식에 맞춰 CSV 또는 XLSX로 다시 저장해 주세요.');
@@ -145,6 +151,10 @@ async function parseUpload(file) {
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   if (!sheet) throw new Error('첫 번째 시트에 데이터를 입력해 주세요.');
   const [header, ...records] = xlsx.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false, dateNF: 'yyyy-mm-dd', blankrows: true });
+  const spreadsheet = /\.xlsx$/i.test(file.name);
+  const rawRecords = spreadsheet
+    ? xlsx.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: true, blankrows: true }).slice(1) : records;
+  const dateSettings = { xlsx: spreadsheet ? xlsx : null, date1904: workbook.Workbook?.WBProps?.date1904 === true };
   if (!header || records.length > 1000) throw new Error('파일 한 개에 현장을 1~1,000개 입력해 주세요.');
   const columns = header.map(fieldKey);
   const indices = Object.fromEntries(Object.entries(headerKeys).map(([key, aliases]) => [key, columns.findIndex(value => aliases.includes(value))]));
@@ -162,8 +172,8 @@ async function parseUpload(file) {
     const lat = Number(read('lat'));
     const lng = Number(read('lng'));
     const status = uploadStatuses.get(fieldKey(read('status')));
-    const dueDate = formatDate(read('dueDate'));
-    const completedDate = formatDate(read('completedDate'));
+    const dueDate = formatDate(rawRecords[index]?.[indices.dueDate], dateSettings);
+    const completedDate = formatDate(rawRecords[index]?.[indices.completedDate], dateSettings);
     const count = read('plannedUnits').replace(/,/g,'');
     const plannedUnits = count ? Number(count) : null;
     if (!id || id.length > 80 || !name || name.length > 120 || address.length > 240 || !read('lat') || !read('lng')

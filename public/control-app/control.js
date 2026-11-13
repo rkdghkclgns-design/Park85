@@ -66,7 +66,7 @@ export async function mountControlDetail(root, route, api, signal, movedZone) {
       if (!saved || typeof saved.text!=='string' || (saved.html!=null && typeof saved.html!=='string')) {
         throw new Error('보고 자료의 형식을 확인해 주세요.');
       }
-      root.innerHTML='<section class="card ops-upload stack mail-preview"><h1>보관된 전체 보고 자료</h1><div class="row"><button class="btn compact" data-download-html>HTML 다운로드</button><button class="btn compact" data-download-text>텍스트 다운로드</button></div><iframe title="보관된 전체 보고 자료" sandbox></iframe><pre hidden></pre></section>';
+      root.innerHTML='<section class="card ops-upload stack mail-preview"><h1>보관된 전체 보고 자료</h1><div class="row"><button class="btn compact" data-download-html>HTML 다운로드</button><button class="btn compact" data-download-text>텍스트 다운로드</button></div><iframe title="보관된 전체 보고 자료" sandbox="allow-popups allow-popups-to-escape-sandbox"></iframe><pre hidden></pre></section>';
       const {text:plain,html}=saved;
       if (html) root.querySelector('iframe').srcdoc=mailPreviewDocument(html);
       else {
@@ -94,7 +94,7 @@ export async function mountControlDetail(root, route, api, signal, movedZone) {
       const stamp = data.sentAt || data.createdAt;
       root.innerHTML = `<header class="page-title"><h1>${data.kind === 'worker' ? '작업 배정·지급 상세' : '세무 비용 자료 상세'}</h1>
         <p>${esc(data.subject)}</p><p>${data.sentAt ? '발송' : '등록'} · ${date.format(new Date(stamp))}</p></header>
-        <section class="card ops-upload stack mail-preview"><iframe title="발송 시점의 상세 내역" sandbox></iframe><pre hidden></pre></section>`;
+        <section class="card ops-upload stack mail-preview"><iframe title="발송 시점의 상세 내역" sandbox="allow-popups allow-popups-to-escape-sandbox"></iframe><pre hidden></pre></section>`;
       if (data.html) root.querySelector('iframe').srcdoc = mailPreviewDocument(data.html);
       else {
         root.querySelector('iframe').hidden = true;

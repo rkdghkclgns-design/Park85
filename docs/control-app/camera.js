@@ -15,6 +15,7 @@ export function cameraFields(guided = false) {
     <p class="small muted" data-camera-help>전·후 각 항목에 6장까지 찍을 수 있습니다. 인터넷이 끊겨도 이 기기에 보관하고 연결되면 이어서 보냅니다.</p>
     <div class="row"><span class="small" role="status" data-camera-queue-status></span>
       <button class="btn compact" type="button" data-retry-camera hidden>대기 사진 다시 보내기</button></div>
+    <p class="small muted" role="status" data-camera-storage-status></p>
     <div class="stack" data-camera-pending></div>
     ${guided ? '' : '<div class="row" data-camera-resume></div>'}
     ${['Before','After'].map(phase => `<div class="stack camera-stage" data-camera-phase="${phase}"><h3>${phase === 'Before' ? '작업 전' : '작업 후'}</h3><div class="work-result-grid">
@@ -177,11 +178,19 @@ export function mountCamera(evidence, api, signal, notify, onModeChange, userId,
     draft.restore();
     onModeChange();
     const fields = context();
+    const storageStatus=evidence.querySelector('[data-camera-storage-status]');
+    if (storageStatus) storageStatus.textContent=navigator.onLine ? '' : '오프라인 · 보관함 여유 공간은 연결 후 확인합니다.';
     renderDrafts();
     if (usesFiles() || !navigator.onLine || !fields.siteId || !fields.workDate || !fields.assetCode.trim()) return;
     try {
       const data = await api('work/captures?' + new URLSearchParams(fields), { signal });
       if (!signal.aborted && token === latestDraft && draftKey(fields) === draftKey(context())) {
+        if (storageStatus && data.storage) {
+          const {owner,site,global}=data.storage;
+          const mb=value=>(value/1_000_000).toLocaleString('ko-KR',{maximumFractionDigits:1})+' MB';
+          storageStatus.textContent='서버 보관 여유 · 내 사진 '+mb(owner.remaining)+' · 이 현장 '+mb(site.remaining)+' · 전체 '+mb(global.remaining)
+            + ([owner,site,global].some(row=>row.remaining<row.limit*0.2) ? ' · 공간이 부족해지고 있습니다. 관리자에게 확인해 주세요.' : '');
+        }
         serverDrafts.set(draftKey(fields), data.captures.length ? data.captures : data.registration?.photos || []);
         recoverable.set(draftKey(fields),data.inProgress || []);
         renderDrafts();

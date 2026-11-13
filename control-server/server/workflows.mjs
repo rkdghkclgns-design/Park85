@@ -238,8 +238,15 @@ async function saveWorkEvidence(request, env, account, admin, context) {
   const id = crypto.randomUUID();
   try {
     const saved = await Promise.allSettled(photos.map(([slot, bytes]) =>
-      bucket.put(objectKey(id, slot), bytes, { httpMetadata: { contentType: 'image/jpeg' } })));
-    if (saved.some(item => item.status === 'rejected')) throw new HttpError(502, '증빙 사진을 저장하지 못했습니다.');
+      bucket.put(objectKey(id, slot), bytes, { httpMetadata: { contentType: 'image/jpeg' },
+        customMetadata:{proofOwner:account.id,proofSite:siteId} })));
+    const failure=saved.find(item=>item.status==='rejected');
+    if (failure) {
+      if (/photo_(?:owner|site|media)_limit/.test(String(failure.reason))) {
+        throw new HttpError(507,'사진 보관 한도에 도달했습니다. 입력한 사진을 보관하고 관리자 확인 후 다시 전송해 주세요.');
+      }
+      throw new HttpError(502, '증빙 사진을 저장하지 못했습니다.');
+    }
     const result = await db.prepare(`
       INSERT INTO charger_evidence (id, site_id, work_date, asset_code, author_id, author_name,
                                     exterior, interior, safety_checked, issue, created_at, charger_type, canopy, result_detail, zone_id, capture_ids, history_actor,device_number,internal_work,safety_checklist,submission_hash)

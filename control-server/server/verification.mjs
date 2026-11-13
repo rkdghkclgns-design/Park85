@@ -65,6 +65,7 @@ function verificationEnvironment(env, origin) {
       put: (key, body, options) => bucket.put(photoKey(key), body, options),
       get: key => bucket.get(photoKey(key)),
       delete: key => bucket.delete(photoKey(key)),
+      ...(bucket.proofUsage ? {proofUsage:scope=>bucket.proofUsage({...scope,verification:true})} : {}),
     } : undefined,
   };
 }

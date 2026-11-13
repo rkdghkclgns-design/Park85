@@ -353,18 +353,18 @@ export async function handleApi(request, env, handleControl, handleWorkflows) {
       const { results } = await db.prepare(`
         WITH actor(today, role, user_id, email) AS (VALUES (?, ?, ?, ?)), current_sites AS (
           SELECT w.id, w.name, w.address, w.lat, w.lng,
-                 CASE WHEN actor.role = 'cleaner' AND p.worker_email <> actor.email THEN ''
+                 CASE WHEN actor.role = 'cleaner' AND p.worker_email IS NOT actor.email THEN ''
                       ELSE COALESCE(p.next_due, w.due_date) END AS nextDue,
-                 MAX(w.updated_at, CASE WHEN actor.role = 'cleaner' AND p.worker_email <> actor.email THEN ''
+                 MAX(w.updated_at, CASE WHEN actor.role = 'cleaner' AND p.worker_email IS NOT actor.email THEN ''
                       ELSE COALESCE(p.updated_at, '') END, COALESCE(visible_report.updated_at, '')) AS updatedAt,
-                 CASE WHEN actor.role = 'cleaner' AND p.worker_email <> actor.email THEN ''
+                 CASE WHEN actor.role = 'cleaner' AND p.worker_email IS NOT actor.email THEN ''
                       WHEN p.site_id IS NULL THEN COALESCE(w.delay_reason, '')
                       WHEN p.delay_date = p.next_due THEN p.delay_reason ELSE '' END AS delayReason,
-                 CASE WHEN actor.role = 'cleaner' AND p.worker_email <> actor.email THEN COALESCE(visible_report.author_name, '')
+                 CASE WHEN actor.role = 'cleaner' AND p.worker_email IS NOT actor.email THEN COALESCE(visible_report.author_name, '')
                       ELSE COALESCE(p.worker_name, NULLIF(w.assignee, ''), visible_report.author_name, '') END AS assignee,
                  CASE WHEN actor.role IN ('editor', 'admin', 'owner') AND (p.site_id IS NULL OR p.worker_name = w.assignee)
                       THEN COALESCE(w.assignee_contact, '') ELSE '' END AS assigneeContact,
-                 CASE WHEN actor.role = 'viewer' OR (actor.role = 'cleaner' AND p.worker_email <> actor.email) THEN ''
+                 CASE WHEN actor.role = 'viewer' OR (actor.role = 'cleaner' AND p.worker_email IS NOT actor.email) THEN ''
                       ELSE COALESCE(p.instructions, w.work_note) END AS workNote,
                  CASE WHEN actor.role <> 'cleaner' OR p.worker_email = actor.email THEN p.repeat_days END AS repeatDays,
                  visible_report.author_name AS reportWorker,
@@ -373,7 +373,7 @@ export async function handleApi(request, env, handleControl, handleWorkflows) {
                  COALESCE(g.planned_units,w.planned_units) AS plannedUnits,
                  CASE WHEN actor.role <> 'cleaner' OR p.worker_email=actor.email THEN g.units END AS progressUnits,
                  visible_report.assignment_due AS reportDue,
-                 CASE WHEN actor.role = 'cleaner' AND p.worker_email <> actor.email THEN visible_report.assignment_due
+                 CASE WHEN actor.role = 'cleaner' AND p.worker_email IS NOT actor.email THEN visible_report.assignment_due
                       ELSE r.assignment_due END AS completionDue,
                  CASE WHEN visible_report.id IS NULL THEN NULL ELSE (
                    SELECT COUNT(*) FROM charger_evidence e
@@ -382,7 +382,7 @@ export async function handleApi(request, env, handleControl, handleWorkflows) {
                  ) END AS evidenceCount,
                  w.completed_date AS importedCompletion,
                  CASE WHEN visible_report.status = 'approved' THEN visible_report.work_date END AS completionDate,
-                 CASE WHEN actor.role = 'cleaner' AND p.worker_email <> actor.email THEN
+                 CASE WHEN actor.role = 'cleaner' AND p.worker_email IS NOT actor.email THEN
                    CASE WHEN visible_report.status = 'approved' THEN 'done' ELSE 'pending' END
                  WHEN g.site_id IS NOT NULL THEN 'in_progress'
                  WHEN p.site_id IS NOT NULL THEN

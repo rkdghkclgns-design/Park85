@@ -727,12 +727,14 @@ async function dispatchControlMail(db, env, kind, reference, message, { HttpErro
   const until = new Date(+now + 45_000).toISOString();
   const target = kind==='contractor' ? queuedMailRoute({kind,reference,recipient:message.recipient,
     recipient_policy_at:stored.recipient_policy_at,historical_consent_at:stored.historical_consent_at},env) : null;
+  // Reserve and read the same snapshot; another request may refresh an unclaimed row.
   const claim = await db.prepare(`
     UPDATE report_mail SET lease_until = ?
     WHERE id = ? AND sent_at IS NULL AND (lease_until IS NULL OR lease_until <= ?)
       ${target ? `AND ?=(${target.sql})` : ''}
-  `).bind(until, deliveryId, nowText,...(target ? [message.recipient,...target.args] : [])).run();
-  if (!claim.meta.changes) throw new HttpError(409, '수신처·완료 상태가 변경됐거나 같은 메일을 처리 중입니다. 미리보기를 다시 확인해 주세요.');
+    RETURNING sender,recipient,subject,body,html
+  `).bind(until, deliveryId, nowText,...(target ? [message.recipient,...target.args] : [])).first();
+  if (!claim) throw new HttpError(409, '수신처·완료 상태가 변경됐거나 같은 메일을 처리 중입니다. 미리보기를 다시 확인해 주세요.');
   try {
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -741,7 +743,7 @@ async function dispatchControlMail(db, env, kind, reference, message, { HttpErro
         'Content-Type': 'application/json',
         'Idempotency-Key': 'bonyeon-report/' + deliveryId,
       },
-      body: JSON.stringify({ from: stored.sender, to: [stored.recipient], subject: stored.subject, text: stored.body, ...(stored.html ? { html: stored.html } : {}) }),
+      body: JSON.stringify({ from: claim.sender, to: [claim.recipient], subject: claim.subject, text: claim.body, ...(claim.html ? { html: claim.html } : {}) }),
       signal: AbortSignal.timeout(12_000),
     });
     const receipt = await response.json();
@@ -1563,8 +1565,10 @@ async function readGmailClaimForRequest(env, requestId) {
   const target = queuedMailRoute(job, env);
   const checked = await env.DB.prepare(`
     UPDATE report_mail SET canceled_at = CASE WHEN recipient = (${target.sql}) AND (
-      office_signal_id IS NULL OR office_signal_id = (
-        SELECT MAX(s.id) FROM office_mail_signals s WHERE s.kind = ? AND s.reference = ? AND (${activeOfficeSignals})
+      office_signal_id IS NULL OR (
+        EXISTS (SELECT 1 FROM control_settings WHERE id=1 AND office_auto_enabled=1) AND office_signal_id = (
+          SELECT MAX(s.id) FROM office_mail_signals s WHERE s.kind = ? AND s.reference = ? AND (${activeOfficeSignals})
+        )
       )
     ) THEN NULL ELSE ? END
     WHERE claim_request_id = ? AND sent_at IS NULL AND hold_at IS NULL AND canceled_at IS NULL

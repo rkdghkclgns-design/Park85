@@ -268,13 +268,24 @@ export async function handleCameraWork(path, request, env, account, admin, conte
         .bind(registration.id,author).all();
       registration.photos=photos;
     }
-    return json({ captures: results, inProgress,registration });
+    const storage=await env.BUCKET?.proofUsage?.({ownerId:account.id,siteId:site});
+    return json({ captures: results, inProgress,registration,...(storage ? {storage} : {}) });
   }
   if (path === '/api/work/captures' && method === 'POST') {
     if (!env.BUCKET) throw new HttpError(503, '증빙 사진 저장소를 확인해 주세요.');
     const form = await readForm(request, env, context);
     const scope = await cameraContext(db, form, account, admin, context,{ allowArchived:true });
     const [site, date, asset, zone, author] = scope;
+    const photoOptions={httpMetadata:{contentType:'image/jpeg'},customMetadata:{proofOwner:author,proofSite:site}};
+    async function savePhoto(key,bytes) {
+      try {await env.BUCKET.put(key,bytes,photoOptions);}
+      catch(error) {
+        if (String(error).includes('photo_owner_limit')) throw new HttpError(507,'내 사진 보관 한도에 도달했습니다. 촬영본은 기기에 보관되며, 관리자에게 저장 공간을 요청한 뒤 다시 전송해 주세요.');
+        if (String(error).includes('photo_site_limit')) throw new HttpError(507,'이 현장의 사진 보관 한도에 도달했습니다. 촬영본은 기기에 보관되며, 관리자 확인 후 다시 전송해 주세요.');
+        if (String(error).includes('photo_media_limit')) throw new HttpError(507,'사진 보관함이 가득 찼습니다. 촬영본은 기기에 보관되며, 관리자 확인 후 다시 전송해 주세요.');
+        throw error;
+      }
+    }
     const slot = form.get('slot');
     if (!cameraSlots.includes(slot)) throw new HttpError(400, '작업 전 또는 후 촬영 위치를 선택해 주세요.');
     const bytes = await validateProofJpeg(form.get('photo'), HttpError, env.JPEG_VALIDATE);
@@ -299,7 +310,7 @@ export async function handleCameraWork(path, request, env, account, admin, conte
     async function confirmStored(photo) {
       const key = cameraPhotoKey(photo.id);
       const stored = env.BUCKET.head ? await env.BUCKET.head(key) : await env.BUCKET.get(key);
-      if (!stored) await env.BUCKET.put(key, bytes, { httpMetadata: { contentType: 'image/jpeg' } });
+      if (!stored) await savePhoto(key,bytes);
       return json(photo);
     }
     const existing = await previouslySaved();
@@ -312,12 +323,7 @@ export async function handleCameraWork(path, request, env, account, admin, conte
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
     const before = slot.endsWith('After') ? slot.replace('After', 'Before') : null;
-    try {
-      await env.BUCKET.put(cameraPhotoKey(id), bytes, { httpMetadata: { contentType:'image/jpeg' } });
-    } catch (error) {
-      if (String(error).includes('photo_media_limit')) throw new HttpError(507,'사진 보관함이 가득 찼습니다. 촬영본은 기기에 보관되며, 관리자 확인 후 다시 전송해 주세요.');
-      throw error;
-    }
+    await savePhoto(cameraPhotoKey(id),bytes);
     try {
       const saved = await db.prepare(`
         INSERT INTO work_camera_photos(id,site_id,work_date,asset_code,zone_id,author_id,slot,created_at,upload_id,upload_hash)
