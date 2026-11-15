@@ -1,4 +1,4 @@
-const cacheName = 'bonyeon-control-shell-v7';
+const cacheName = 'bonyeon-control-shell-v8';
 const files = [
   '', 'index.html', 'styles.css', 'app.js', 'portal-api.js', 'store.js', 'ui.js', 'reports.js', 'monthly.js',
   'operations.js', 'signup.js', 'form-guidance.js', 'regions.js', 'control.js', 'analytics.js', 'workflows.js',
@@ -9,10 +9,9 @@ const files = [
   'vendor/leaflet.js', 'vendor/leaflet.css', 'vendor/xlsx.mini.min.js',
 ].map(file => '/control-app/'+file);
 const shellPaths = new Set(files);
-const recovery = () => new Response(
-  '<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>본연 연결 복구</title><main><h1>관제 연결을 확인해 주세요</h1><p>이 기기에 저장된 현장 사진은 연결이 복구되면 보낼 수 있습니다.</p><p><a href="/control-app/#control">본연 관제 복구 열기</a></p></main></html>',
-  { headers:{ 'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store' } },
-);
+const recovery = () => new Response(null,{status:302,headers:{
+  Location:new URL('/control-app/#control',self.location.origin).href,'Cache-Control':'no-store',
+}});
 
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
@@ -49,8 +48,11 @@ self.addEventListener('fetch', event => {
     })());
   } else if (request.mode==='navigate' && url.pathname==='/') {
     event.respondWith((async () => {
+      if (self.navigator?.onLine===false) return recovery();
       try {
-        const response = await fetch(request,{ signal:AbortSignal.timeout(8000) });
+        // The HTTP cache may return an old React shell while its hashed JS is
+        // unavailable offline. Only a live homepage can replace the cached app.
+        const response = await fetch(request,{ cache:'no-store',signal:AbortSignal.timeout(8000) });
         return response.ok ? response : recovery();
       } catch { return recovery(); }
     })());

@@ -42,7 +42,7 @@ test('public consultation stores one receipt and claims it through the configure
   const DB = await createPreviewDb();
   const env = { DB,BONYEON_FRONTEND_ORIGIN:frontend,BONYEON_APP_LOGIN_REQUIRED:'1',
     BONYEON_OWNER_EMAIL:'owner@example.invalid',BONYEON_GMAIL_FROM:'sender@example.invalid',
-    BONYEON_CONSULTATION_EMAIL:'consultations@example.invalid',BONYEON_REPORT_START_DATE:new Date().toISOString().slice(0,10),
+    BONYEON_CONSULTATION_EMAIL:'consultations@example.invalid',BONYEON_REPORT_START_DATE:new Date(Date.now()+9*3600_000).toISOString().slice(0,10),
     BONYEON_REPORT_RUN_SECRET:'test-secret-'.repeat(5),
     BONYEON_TURNSTILE_SITE_KEY:'test-site-key',BONYEON_TURNSTILE_SECRET_KEY:'test-secret-key-for-unit-test' };
   t.mock.method(globalThis,'fetch',async (url)=>{
