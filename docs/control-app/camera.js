@@ -18,7 +18,7 @@ export function cameraFields(guided = false) {
     <p class="small muted" role="status" data-camera-storage-status></p>
     <div class="stack" data-camera-pending></div>
     ${guided ? '' : '<div class="row" data-camera-resume></div>'}
-    ${['Before','After'].map(phase => `<div class="stack camera-stage" data-camera-phase="${phase}"><h3>${phase === 'Before' ? '작업 전' : '작업 후'}</h3><div class="work-result-grid">
+    ${['Before','After'].map(phase => `<div class="stack camera-stage" data-camera-phase="${phase}"><h3>${phase === 'Before' ? '청소 전 사진' : '청소 후 사진'} <span class="small muted" data-camera-count="${phase}"></span></h3><div class="work-result-grid">
       ${Object.entries(cameraLabels).filter(([slot]) => slot.endsWith(phase)).map(([slot, label]) => `<section class="stack" data-camera-section="${slot}" data-validation-group>
         <button class="btn compact" type="button" data-start-camera="${slot}">${label} 촬영</button>
         <div class="camera-thumbnails" data-camera-images="${slot}"></div>
@@ -95,6 +95,7 @@ export function mountCamera(evidence, api, signal, notify, onModeChange, userId,
   const recoverable = new Map();
   const zoneCache = new Map();
   const thumbnails = [];
+  const draftThumbnails=new Map();
   const context = () => Object.fromEntries(['siteId', 'workDate', 'assetCode', 'zoneId'].map(name => [name, evidence.elements[name].value]));
   const draftKey = ({ siteId, workDate, assetCode, zoneId }) => JSON.stringify([siteId, workDate, assetCode.trim().normalize('NFKC').toUpperCase(), zoneId]);
   const usesFiles = () => Boolean(fileMode?.checked);
@@ -150,6 +151,12 @@ export function mountCamera(evidence, api, signal, notify, onModeChange, userId,
     drafts = serverDrafts.get(draftKey(fields)) || [];
     const local = localPhotos(fields);
     const captured = [...drafts,...local];
+    for (const [id,url] of draftThumbnails) if (!local.some(photo=>photo.id===id)) {
+      URL.revokeObjectURL(url);
+      draftThumbnails.delete(id);
+    }
+    for (const phase of ['Before','After']) evidence.querySelector(`[data-camera-count="${phase}"]`).textContent=
+      '· '+captured.filter(photo=>photo.slot.endsWith(phase)).length+'장';
     const beforeReady = ['exterior','interior'].every(scope => !evidence.elements[scope].checked
       || captured.some(photo => photo.slot === scope + 'Before'));
     const available = recoverable.get(draftKey(fields)) || [];
@@ -168,6 +175,11 @@ export function mountCamera(evidence, api, signal, notify, onModeChange, userId,
       const markup = drafts.filter(photo => photo.slot === slot).map((photo, index) =>
         `<div><a href="${esc(imageLink(photo.id))}" target="_blank" rel="noopener"><img ${privateImage(imageLink(photo.id))} alt="${cameraLabels[slot]} ${index + 1}"></a>
           <button class="link-button small" type="button" data-remove-capture="${esc(photo.id)}">삭제</button></div>`).join('')
+        + local.filter(photo=>photo.slot===slot).map(photo=>{
+          if (!draftThumbnails.has(photo.id)) draftThumbnails.set(photo.id,URL.createObjectURL(photo.blob));
+          return `<div><img src="${esc(draftThumbnails.get(photo.id))}" alt="${cameraLabels[slot]} 기기 저장 사진">
+            <button class="link-button small" type="button" data-remove-pending="${esc(photo.id)}" ${syncing?'disabled':''}>삭제</button></div>`;
+        }).join('')
         + (waitingForBefore ? '<span class="small muted">작업 전 사진을 먼저 찍어 주세요.</span>' : '');
       updatePhotoThumbnails(list,markup);
     }
@@ -455,7 +467,7 @@ export function mountCamera(evidence, api, signal, notify, onModeChange, userId,
     renderQueue();renderDrafts();
     if(event?.type==='uploaded')void refreshDrafts();
   });
-  signal.addEventListener('abort', () => { stop();unsubscribe();thumbnails.forEach(url => URL.revokeObjectURL(url)); }, { once: true });
+  signal.addEventListener('abort', () => { stop();unsubscribe();thumbnails.forEach(url => URL.revokeObjectURL(url));draftThumbnails.forEach(url=>URL.revokeObjectURL(url)); }, { once: true });
   updateMode();
   void refreshQueue().then(() => { if (pending.length) void syncQueue(); }).catch(() => {
     if (!signal.aborted) evidence.querySelector('[data-camera-queue-status]').textContent = '이 기기에서 임시 저장 공간을 열지 못했습니다.';

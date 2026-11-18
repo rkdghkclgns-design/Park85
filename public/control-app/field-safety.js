@@ -10,7 +10,7 @@ export const safetyChecks = {
 
 export function safetyFields() {
   return `<fieldset class="stack work-fieldset"><legend>충전기 기본 안전 점검</legend>
-    <p class="small muted">파손·누수·발열 등 이상이 있으면 작업을 중단하고 현장 담당자에게 알려 주세요.</p>
+    <p class="small muted">작업자는 안전 수칙을 지키고 이상을 즉시 알릴 책임이 있습니다. 파손·누수·발열 등 위험이 있으면 작업을 중단하고 현장 담당자에게 알려 주세요.</p>
     ${Object.entries(safetyChecks).map(([key,label])=>`<label class="check guide-check" ${key === 'isolation' ? 'data-interior-check hidden' : ''}>
       <input type="checkbox" name="guide_${key}" ${key === 'isolation' ? 'disabled' : 'required'}><span>${esc(label)}</span></label>`).join('')}
     </fieldset>`;

@@ -5,6 +5,7 @@ import { cameraFields, mountCamera, zoneFields } from './camera.js';
 import { downloadSettlement, settlementReview } from './settlement-export.js';
 import { focusFieldIssue } from './form-guidance.js';
 import { evidenceDrafts } from './evidence-drafts.js';
+import { adminFloorFields } from './worker-floors.js';
 import { completedSafetyList, safetyChecks, safetyFields } from './field-safety.js';
 import { evidenceZoneBatchEditor, evidenceZoneEditor, evidenceZoneMoveMessage, mountEvidenceZoneEditors } from './evidence-zone.js';
 
@@ -66,6 +67,23 @@ export function workflowsPage(admin, today) {
         <label class="field"><span>수량을 등록할 건물</span><select name="siteId" required></select></label>
         ${label('건물 배정 설비 수량(기)','plannedUnits','number','min="1" max="10000" step="1" required inputmode="numeric"')}
         <button type="submit" class="btn compact">배정 수량 저장</button></form>
+      <details class="report-control-row"><summary>층·구역별 설비와 작업 범위</summary>
+        <form class="stack" data-work="floor">
+          <div class="row">
+            <label class="field"><span>층별 설비 등록 현장</span><select name="siteId" required></select></label>
+            <label class="field"><span>편집할 층·구역</span><select name="zoneId"><option value="">새 층·구역</option></select></label>
+          </div>
+          <p class="small muted" data-floor-total></p>
+          <div class="row">${label('층·구역명','name','text','required maxlength="80" placeholder="예: 지하 1층 완속 구역"')}
+            ${label('배정 수량(기)','units','number','required min="1" max="10000" step="1"')}
+            ${adminFloorFields()}
+          </div>
+          <label class="check"><input type="checkbox" name="repair">수리 포함</label>
+          <div class="row"><button type="submit" class="btn primary" data-floor-save>층별 배정 저장</button>
+            <button type="button" class="btn compact" data-floor-remove hidden>선택한 층·구역 삭제</button></div>
+          <p class="small" role="status" data-floor-status></p>
+        </form>
+      </details>
       <p class="small muted">예정일이 지나면 지연으로 표시합니다. 정기 작업은 충전기별 사진 증빙 수량이 보고와 일치해야 승인할 수 있습니다.</p>
       <div data-work-plans class="stack"></div>
     </section>` : ''}
@@ -73,7 +91,7 @@ export function workflowsPage(admin, today) {
       ${admin ? '<h2>충전기별 사진·안전 점검</h2>' : ''}
       <form class="stack" data-work="evidence">
         <input type="hidden" name="assetCode">
-        <div class="stack" ${admin ? '' : 'data-guide-group="setup"'}>
+        <div class="stack" ${admin ? '' : 'data-guide-group="before" data-legacy-floor-fields'}>
         <div class="row">
           <label class="field" ${admin ? '' : 'hidden'}><span>증빙 현장</span><select name="siteId" required></select></label>
           ${label('증빙 작업일', 'workDate', 'date', `required value="${today}" max="${today}"`)}
@@ -89,23 +107,27 @@ export function workflowsPage(admin, today) {
               <div class="row" data-photo-pair="interior">${label(slots.interiorBefore, 'interiorBefore', 'file', 'accept="image/*"')}${label(slots.interiorAfter, 'interiorAfter', 'file', 'accept="image/*"')}</div>
             </div>` : ''}
         </fieldset>
-        ${admin ? '' : `<div class="row" data-guide-devices></div><div class="row" data-camera-resume></div>${safetyFields()}
-          <div class="row"><button class="btn primary" type="button" data-guide-action="to-before">점검 완료 · 작업 전 촬영</button>
-            <button type="button" class="btn" data-open-evidence-draft hidden>임시저장 증빙 열기</button></div>`}
         </div>
+        ${admin ? '' : `<div class="stack" data-guide-group="setup">${safetyFields()}
+          <button class="btn primary" type="button" data-guide-action="to-before">안전 확인 완료 · 작업 전 촬영</button>
+        </div>
+        <div class="stack" data-guide-group="before"><div data-guide-floor-select></div>
+          <div class="row" data-guide-devices></div><div class="row" data-camera-resume></div>
+          <div><button type="button" class="btn" data-open-evidence-draft hidden>임시저장 증빙 열기</button></div></div>`}
         <div class="stack" ${admin ? '' : 'data-guide-group="before after results"'}>
           ${cameraFields(!admin)}
           ${admin ? '' : `<div data-guide-group="before"><button class="btn primary" type="button" data-guide-action="to-after">작업 전 촬영 완료 · 작업 후 촬영</button></div>
           <div data-guide-group="after"><button class="btn primary" type="button" data-guide-action="to-results">작업 후 촬영 완료 · 결과 입력</button></div>`}
         </div>
         <div class="stack" ${admin ? '' : 'data-guide-group="results"'}>
-        <label class="check"><input type="checkbox" name="safety" value="1" required>현장 안전 절차에 따라 작업 전 점검과 작업 후 상태 확인을 마쳤습니다.</label>
+        ${admin ? '' : '<div class="stack" data-guide-floor-review></div>'}
+        <label class="check"><input type="checkbox" name="safety" value="1" required>${admin?'현장 안전 절차에 따라 작업 전 점검과 작업 후 상태 확인을 마쳤습니다.':'이 층·구역에서 촬영한 충전기의 청소와 작업 후 안전 확인을 마쳤습니다.'}</label>
         <label class="field"><span>이상 사항 (발견 시)</span><textarea rows="2" name="issue" maxlength="800"></textarea></label>
         ${workResultFields({},!admin)}
-        <div><button type="submit" class="btn primary" data-upload-proof>증빙 저장</button></div>
+        <div><button type="submit" class="btn primary" data-upload-proof>${admin?'증빙 저장':'충전기 작업 저장'}</button></div>
         </div>
         <div class="row">
-          <button type="button" class="btn" data-save-evidence-draft>증빙 임시저장</button>
+          <button type="button" class="btn" data-save-evidence-draft>임시저장</button>
           ${admin ? '<button type="button" class="btn" data-open-evidence-draft hidden>임시저장 증빙 열기</button>' : ''}</div>
         <p class="small" data-evidence-draft-status role="status"></p>
       </form>
@@ -290,6 +312,7 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
   const evidence = root.querySelector('form[data-work="evidence"]');
   const evidenceArchive = root.querySelector('[data-work-evidence]');
   const evidenceMonth = root.querySelector('[name="evidenceMonth"]');
+  const floorForm=root.querySelector('[data-work="floor"]');
   const ledgerMonth = root.querySelector('[name="ledgerMonth"]');
   const ledger = root.querySelector('[data-work-ledger]');
   let model;
@@ -297,6 +320,8 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
   let overviewToken = 0;
   let ledgerToken = 0;
   let evidenceLocked=false;
+  let floorToken=0;
+  let floorRows=[];
   const working = new WeakSet();
   const getSite = id => model?.sites.find(site => site.id === id);
 
@@ -309,7 +334,56 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
     plan.querySelector('[data-remove-plan]').hidden = !site?.workerName;
   }
 
+  function fillFloor() {
+    const row=floorRows.find(zone=>zone.id===floorForm.elements.zoneId.value);
+    for(const name of ['name','units','chargerType','housing','canopy','scope']) floorForm.elements[name].value=row?.[name] ?? '';
+    floorForm.elements.repair.checked=Boolean(row?.repair);
+    floorForm.querySelector('[data-floor-remove]').hidden=!row;
+  }
+  async function loadFloors(selected='') {
+    const siteId=floorForm.elements.siteId.value;
+    const token=++floorToken;
+    const status=floorForm.querySelector('[data-floor-status]');
+    const save=floorForm.querySelector('[data-floor-save]');
+    const zone=floorForm.elements.zoneId;
+    floorRows=[];
+    zone.disabled=save.disabled=true;
+    zone.replaceChildren(new Option('새 층·구역',''));
+    fillFloor();
+    status.textContent=siteId?'층별 설비를 불러오는 중입니다.':'';
+    floorForm.querySelector('[data-floor-total]').textContent='';
+    if (!siteId) return;
+    try {
+      const data=await api('work/floor-plan?'+new URLSearchParams({siteId}),{signal});
+      if (signal.aborted || token!==floorToken) return;
+      floorRows=data.zones;
+      for (const item of floorRows) zone.add(new Option(item.name,item.id));
+      zone.value=floorRows.some(row=>row.id===selected)?selected:'';
+      const total=floorRows.reduce((n,row)=>n+(row.units || 0),0);
+      floorForm.querySelector('[data-floor-total]').textContent=
+        '층별 배정 '+total+'기 / 건물 배정 '+(getSite(siteId)?.configuredUnits ?? '미등록')+'기';
+      zone.disabled=save.disabled=false;
+      status.textContent='';
+      fillFloor();
+    } catch(error) { if (!signal.aborted && token===floorToken) status.textContent=error.message; }
+  }
+  function assignedFloor() {
+    return getSite(evidence.elements.siteId.value)?.floors?.find(floor=>floor.id===evidence.elements.zoneId.value);
+  }
   function fillPhotoFields() {
+    const fields=evidence.elements;
+    const floor=guide ? assignedFloor() : null;
+    if (guide) {
+      const site=getSite(fields.siteId.value);
+      const completePlan=site?.plannedUnits && site.floors?.reduce((total,item)=>total+item.units,0)>=site.plannedUnits;
+      evidence.toggleAttribute('data-managed-floor',Boolean(floor || completePlan));
+    }
+    if (floor) {
+      fields.chargerType.value=floor.chargerType;
+      fields.canopy.value=floor.canopy;
+      fields.exterior.checked=floor.scope!=='interior';
+      fields.interior.checked=floor.scope!=='exterior';
+    }
     const isolation = evidence.elements.guide_isolation;
     if (isolation) {
       const needed = evidence.elements.interior.checked;
@@ -337,7 +411,8 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
   const camera = mountCamera(evidence, api, signal, notify, fillPhotoFields, userId, draft, refresh);
   function renderDevices() {
     if (!guide) return;
-    const devices = model?.devices?.filter(device=>device.siteId===evidence.elements.siteId.value) || [];
+    const floor = assignedFloor();
+    const devices = model?.devices?.filter(device=>device.siteId===evidence.elements.siteId.value && (!floor || device.zoneId===floor.id)) || [];
     const field = evidence.querySelector('[data-guide-devices]');
     field.innerHTML = devices.length ? `<label class="field"><span>이전에 등록한 충전기</span><select data-guide-device>${opt('', '새 충전기')}
       ${devices.map(device=>opt(device.assetCode,device.assetLabel + (device.zoneName ? ' · ' + device.zoneName : ''))).join('')}</select></label>` : '';
@@ -351,16 +426,32 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
       || (!admin && saved.siteId !== evidence.elements.siteId.value);
   }
 
-  async function setEvidenceSite(siteId,workDate) {
+  async function setEvidenceSite(siteId,workDate,zoneId='',zoneName='') {
     draft.flush();
     evidence.elements.siteId.value=siteId;
     evidence.elements.workDate.value=workDate;
     updateDraftButton();
-    await camera.selectZone();
+    await camera.selectZone(zoneId,zoneName);
+    fillPhotoFields();
     renderDevices();
   }
 
+  function missingSafety() {
+    const fields=evidence.elements;
+    return Object.keys(safetyChecks).map(key=>fields['guide_'+key]).find(field=>!field.disabled && !field.checked);
+  }
+  function checkSafety() {
+    const missing=missingSafety();
+    if (!missing) return true;
+    focusFieldIssue(missing,'이 안전 점검 항목을 확인해 주세요.');
+    return false;
+  }
   function checkSetup() {
+    const required=evidence.querySelector('[data-guide-floor-change]');
+    if (evidence.hasAttribute('data-floor-choice-required')) {
+      focusFieldIssue(required,'배정된 층을 선택해 주세요. 기존 사진은 보관됩니다.');
+      return false;
+    }
     const fields = evidence.elements;
     for (const [name,message] of [['workDate','작업일을 확인해 주세요.'],['chargerType','충전기 유형을 선택해 주세요.'],['canopy','캐노피 작업 범위를 선택해 주세요.']]) {
       if (!fields[name].validity.valid) { focusFieldIssue(fields[name],message); return false; }
@@ -369,16 +460,11 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
       focusFieldIssue(fields.exterior,'외부 또는 내부 청소를 한 가지 이상 선택해 주세요.');
       return false;
     }
-    const missing = Object.keys(safetyChecks).map(key=>fields['guide_'+key]).find(field=>!field.disabled && !field.checked);
-    if (missing) {
-      focusFieldIssue(missing,'이 안전 점검 항목을 확인해 주세요.');
-      return false;
-    }
     return true;
   }
   function setupValid() {
     const fields=evidence.elements;
-    return ['workDate','chargerType','canopy'].every(name=>fields[name].validity.valid)
+    return !evidence.hasAttribute('data-floor-choice-required') && ['workDate','chargerType','canopy'].every(name=>fields[name].validity.valid)
       && (fields.exterior.checked || fields.interior.checked)
       && Object.keys(safetyChecks).every(key=>fields['guide_'+key].disabled || fields['guide_'+key].checked);
   }
@@ -401,6 +487,11 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
         form.elements.siteId.innerHTML = siteOptions;
         form.elements.siteId.value = data.sites.some(site => site.id === prior) ? prior : '';
       }
+      if (floorForm) {
+        const floorSite=floorForm.elements.siteId.value;
+        floorForm.elements.siteId.innerHTML=siteOptions;
+        floorForm.elements.siteId.value=data.sites.some(row=>row.id===floorSite)?floorSite:'';
+      }
       if (plan) {
         plan.elements.workerEmail.innerHTML = opt('', data.workers.length ? '작업자를 선택해 주세요' : '사용자 메뉴에서 청소 작업자를 등록해 주세요')
           + data.workers.map(worker => opt(worker.email, worker.name + ' · ' + worker.email)).join('');
@@ -417,7 +508,7 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
         + (data.evidenceOverflow ? '<p class="small muted">최근 증빙 200건을 표시합니다.</p>' : '');
       updateDraftButton();
       renderDevices();
-      if (guide) guide.onModel(data);
+      if (guide) { fillPhotoFields();guide.onModel(data); }
       evidence.querySelector('[data-upload-proof]').disabled = !data.photoReady;
       if (!data.photoReady) notify('증빙 사진 저장소 연결이 필요합니다.', true);
     } catch (error) { if (!signal.aborted && token === overviewToken) notify(error.message, true); }
@@ -474,6 +565,8 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
   }
   plan?.elements.siteId.addEventListener('change', fillPlan, { signal });
   quantity?.elements.siteId.addEventListener('change',fillQuantity,{ signal });
+  floorForm?.elements.siteId.addEventListener('change',()=>loadFloors(),{signal});
+  floorForm?.elements.zoneId.addEventListener('change',fillFloor,{signal});
   evidence.addEventListener('change', fillPhotoFields, { signal });
   evidence.addEventListener('change', event => {
     if (!event.target.matches('[data-guide-device]')) return;
@@ -520,10 +613,17 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
         await api('work/plan', { method: 'PUT', body: { ...data, repeatDays: Number(data.repeatDays) }, signal });
         notify('정기 작업 배정을 저장했습니다.');
         await afterPlanChange();
+      } else if (action === 'floor') {
+        const siteId=data.siteId;
+        const {zone}=await api('work/floor-plan',{method:'PUT',body:{...data,units:Number(data.units),repair:payload.has('repair')},signal});
+        notify('층별 설비 배정을 저장했습니다.');
+        await refresh();
+        if (floorForm.elements.siteId.value===siteId) await loadFloors(zone.id);
       } else if (action === 'quantity') {
         await api('work/site-quantity',{ method:'PATCH',body:{ siteId:data.siteId,plannedUnits:Number(data.plannedUnits) },signal });
         notify('건물 배정 설비 수량을 저장했습니다.');
         await afterPlanChange();
+        if (floorForm.elements.siteId.value===data.siteId) await loadFloors(floorForm.elements.zoneId.value);
       } else if (action === 'delay') {
         await api('work/delay', { method: 'PATCH', body: { siteId: form.dataset.site, dueDate: form.dataset.due, reason: data.reason }, signal });
         notify('지연 사유를 저장했습니다.');
@@ -566,7 +666,7 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
         updateDraftButton();
         await camera.reset();
         renderDevices();
-        notify('충전기 증빙을 저장했습니다.');
+        notify(guide?'충전기 작업 내용을 저장했습니다.':'충전기 증빙을 저장했습니다.');
         guide?.onSaved(data.siteId,data.workDate);
         await refresh();
         } finally {
@@ -682,6 +782,16 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
       notify('작업 증빙을 삭제했습니다.');
       await refresh();
     });
+    if (button.hasAttribute('data-floor-remove') && floorForm?.elements.zoneId.value &&
+      window.confirm('선택한 층·구역을 삭제할까요? 사진이나 작업 기록이 연결된 구역은 보존됩니다.')) {
+      const {siteId,zoneId}=Object.fromEntries(new FormData(floorForm));
+      run(button,async()=>{
+        await api('work/zones',{method:'DELETE',body:{siteId,zoneId},signal});
+        notify('층·구역을 삭제했습니다.');
+        await refresh();
+        if (floorForm.elements.siteId.value===siteId) await loadFloors();
+      });
+    }
     if (button.hasAttribute('data-remove-plan') && plan?.elements.siteId.value && window.confirm('이 현장의 정기 배정을 해제할까요? 기존 보고는 보존됩니다.')) {
       run(button, async () => {
         await api('work/plan', { method: 'DELETE', body: { siteId: plan.elements.siteId.value }, signal });
@@ -698,7 +808,8 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
     }
   }, { signal });
   return {
-    refresh:()=>Promise.all([refresh(),refreshLedger()]),form:evidence,camera,draft,setEvidenceSite,checkSetup,setupValid,resetSafety,
+    refresh:()=>Promise.all([refresh(),refreshLedger()]),form:evidence,camera,draft,setEvidenceSite,checkSetup,checkSafety,setupValid,resetSafety,assignedFloor,
+    safetyValid:()=>!missingSafety(),
     assignmentFor:siteId=>getSite(siteId)?.nextDue || '',
     recheckAssignment() { draft.restore();fillPhotoFields(); },
     getMonth:()=>evidenceMonth.value,

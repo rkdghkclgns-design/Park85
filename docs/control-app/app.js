@@ -294,7 +294,7 @@ function render({ keepScroll = false } = {}) {
   activeRoute = route;
   const controlDetail = route.startsWith('control-detail/');
   const ownPayment=account.role==='cleaner' && route.startsWith('control-detail/worker/'+encodeURIComponent(account.id)+'?');
-  const navKey = independentPortal && isLegacyRoute(route) ? 'more' : location.hash==='#history' && account.role==='cleaner' ? 'history' : ownPayment ? 'payments'
+  const navKey = independentPortal && isLegacyRoute(route) ? 'more' : location.hash==='#history' && account.role==='cleaner' ? 'history' : ownPayment || route.startsWith('payments?') ? 'payments'
     : route.startsWith('d-') ? 'days' : controlDetail ? 'control' : route;
   let body;
   if (route === 'home') body = renderHome();
@@ -303,7 +303,7 @@ function render({ keepScroll = false } = {}) {
   if (route === 'alerts') body = renderAlerts();
   if (route === 'legacy') body = renderLegacyArchive();
   if (route === 'more') body = renderMore();
-  if (controlDetail || ['map', 'control', 'analytics', 'regions', 'users', 'about', 'test-data'].includes(route)) body = operationsPage(route, account);
+  if (controlDetail || route.startsWith('payments?') || ['map', 'control', 'payments', 'analytics', 'regions', 'users', 'about', 'test-data'].includes(route)) body = operationsPage(route, account);
   if (route.startsWith('d-')) body = renderReport(route.slice(2));
   if (independentPortal && !verification && isLegacyRoute(route)) body=legacyNotice()+body;
   const scroll = keepScroll ? window.scrollY : 0;

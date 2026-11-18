@@ -150,16 +150,18 @@ async function removeWorkZone(db,siteId,zoneId,account,admin,HttpError) {
   const result = await db.prepare(`
     UPDATE work_zones AS z SET deleted_at=?
     WHERE z.id=? AND z.site_id=? AND z.deleted_at IS NULL
+      AND (? OR z.planned_units IS NULL)
       AND (? OR EXISTS (SELECT 1 FROM work_plans p WHERE p.site_id=z.site_id AND p.worker_email=?))
       AND NOT EXISTS (SELECT 1 FROM work_camera_photos c WHERE c.site_id=z.site_id AND c.zone_id=z.id)
       AND NOT EXISTS (SELECT 1 FROM charger_evidence e WHERE e.site_id=z.site_id AND e.zone_id=z.id)
-  `).bind(new Date().toISOString(),zoneId,siteId,Number(admin),account.email).run();
+  `).bind(new Date().toISOString(),zoneId,siteId,Number(admin),Number(admin),account.email).run();
   if (result.meta.changes) return;
   const zone = await db.prepare(`
-    SELECT z.deleted_at FROM work_zones z WHERE z.id=? AND z.site_id=?
+    SELECT z.deleted_at,z.planned_units FROM work_zones z WHERE z.id=? AND z.site_id=?
       AND (? OR EXISTS (SELECT 1 FROM work_plans p WHERE p.site_id=z.site_id AND p.worker_email=?))
   `).bind(zoneId,siteId,Number(admin),account.email).first();
   if (!zone) throw new HttpError(404,'해당 현장의 작업 구역을 찾을 수 없습니다.');
+  if (!admin && zone.planned_units!=null) throw new HttpError(403,'관리자가 배정한 층·구역은 관리자 화면에서 변경해 주세요.');
   if (!zone.deleted_at) throw new HttpError(409,'사진이나 작업 기록이 연결된 구역은 삭제할 수 없습니다.');
 }
 
@@ -168,16 +170,18 @@ async function renameWorkZone(db,siteId,zoneId,name,account,admin,HttpError) {
   const renamed = await db.prepare(`
     UPDATE work_zones AS z SET name=?
     WHERE z.id=? AND z.site_id=? AND z.deleted_at IS NULL
+      AND (? OR z.planned_units IS NULL)
       AND (? OR EXISTS (SELECT 1 FROM work_plans p WHERE p.site_id=z.site_id AND p.worker_email=?))
       AND NOT EXISTS (SELECT 1 FROM work_zones other WHERE other.site_id=z.site_id AND other.id<>z.id AND other.name=?)
     RETURNING id,name
-  `).bind(name,zoneId,siteId,Number(admin),account.email,name).first();
+  `).bind(name,zoneId,siteId,Number(admin),Number(admin),account.email,name).first();
   if (renamed) return renamed;
   const active = await db.prepare(`
-    SELECT 1 FROM work_zones z WHERE z.id=? AND z.site_id=? AND z.deleted_at IS NULL
+    SELECT z.planned_units FROM work_zones z WHERE z.id=? AND z.site_id=? AND z.deleted_at IS NULL
       AND (? OR EXISTS (SELECT 1 FROM work_plans p WHERE p.site_id=z.site_id AND p.worker_email=?))
   `).bind(zoneId,siteId,Number(admin),account.email).first();
   if (!active) throw new HttpError(404,'해당 현장의 작업 구역을 찾을 수 없습니다.');
+  if (!admin && active.planned_units!=null) throw new HttpError(403,'관리자가 배정한 층·구역은 관리자 화면에서 변경해 주세요.');
   throw new HttpError(409,'이 현장에서 이미 사용된 구역 이름입니다. 다른 이름을 입력해 주세요.');
 }
 
@@ -237,8 +241,8 @@ export async function handleCameraWork(path, request, env, account, admin, conte
         INSERT INTO work_zones(id,site_id,name,created_at,created_by)
         SELECT ?,w.id,?,?,? FROM work_sites w WHERE w.id = ?
           AND (? OR EXISTS (SELECT 1 FROM work_plans p WHERE p.site_id = w.id AND p.worker_email = ?))
-        ON CONFLICT(site_id,name) DO UPDATE SET deleted_at=NULL WHERE work_zones.deleted_at IS NOT NULL
-      `).bind(crypto.randomUUID(), name, new Date().toISOString(), account.id, siteId, Number(admin), account.email).run();
+        ON CONFLICT(site_id,name) DO UPDATE SET deleted_at=NULL WHERE work_zones.deleted_at IS NOT NULL AND (? OR work_zones.planned_units IS NULL)
+      `).bind(crypto.randomUUID(), name, new Date().toISOString(), account.id, siteId, Number(admin), account.email, Number(admin)).run();
       const zone = await db.prepare('SELECT id,name FROM work_zones WHERE site_id=? AND name=? AND deleted_at IS NULL')
         .bind(siteId,name).first();
       if (!zone) throw new HttpError(409, '현장 배정을 다시 확인해 주세요.');

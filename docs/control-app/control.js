@@ -47,7 +47,7 @@ export function controlDetailPage(account) {
       : '<div class="card empty">현장 보고 권한이 없습니다.</div>');
 }
 
-export async function mountControlDetail(root, route, api, signal, movedZone) {
+export async function mountControlDetail(root, route, api, signal, movedZone, earningsAccount) {
   const [, kind, segment] = route.split('/');
   const [encoded, query] = segment.split('?');
   const month = new URLSearchParams(query).get('month') || today().slice(0, 7);
@@ -87,7 +87,10 @@ export async function mountControlDetail(root, route, api, signal, movedZone) {
       root.querySelector('[data-download-text]').addEventListener('click',()=>download(plain,'text/plain;charset=utf-8','본연-전체보고.txt'),{signal});
       return;
     }
-    const data = await api('control/detail?' + new URLSearchParams({ kind, id, month }), { signal });
+    const [data, earnings] = await Promise.all([
+      api('control/detail?' + new URLSearchParams({ kind, id, month }), { signal }),
+      earningsAccount ? api('control/overview?' + new URLSearchParams({month}),{signal}).then(value=>value.earnings) : null,
+    ]);
     if (signal.aborted) return;
     if (kind === 'mail') {
       const date = new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Seoul' });
@@ -106,6 +109,8 @@ export async function mountControlDetail(root, route, api, signal, movedZone) {
     }
     const { title, address, nextDue, reports, devices, example, overflow, billing, payouts, canEditResults } = data;
     const type = { site: '현장', worker: '작업자', report: '작업 결과' }[kind];
+    const earningsSummary=earnings ? `<section class="card ops-upload stack"><h2>내 배정과 수익</h2>
+      <dl class="ledger-summary">${workerEarningsMarkup(earnings,month,Boolean(earningsAccount.canSwitchMode))}</dl></section>` : '';
     const work = reports.map(report => `<article class="report-control-row stack">
       <div class="row between"><strong>${kind === 'site' ? esc(report.siteName) : detailAnchor('site', report.siteId, report.siteName, report.workDate)}</strong><span class="pill">${esc(reportStatus(report))}</span></div>
       <p class="small muted">${esc(report.workDate)} · ${kind === 'worker' ? esc(report.authorName) : detailAnchor('worker', report.authorId, report.authorName, report.workDate)}${planQuantity(report)} · 실작업 ${report.units}기 · 외부 ${report.exterior}기 · 내부 ${report.interior}기</p>
@@ -163,9 +168,9 @@ export async function mountControlDetail(root, route, api, signal, movedZone) {
           <p class="small" role="status"></p><div><button class="btn primary" type="submit">지정 대상 보완 요청</button></div>
         </form></section>` : '';
     const archivedPhotos=data.archivedCaptures?.length?`<section class="card ops-upload stack"><h2>보고 등록 전 촬영 사진</h2><div class="detail-photo-gallery">${data.archivedCaptures.map(p=>`<figure><a href="./api/work/capture?id=${encodeURIComponent(p.id)}" target="_blank" rel="noopener"><img ${privateImage('./api/work/capture?id='+encodeURIComponent(p.id))} alt="${esc(evidencePhotoLabels[p.slot])}"></a><figcaption>${esc(p.workDate)} · ${esc(p.assetCode)} · ${esc(evidencePhotoLabels[p.slot])}</figcaption></figure>`).join('')}</div>${data.archivedCapturesOverflow?'<p>최근 사진 60장을 표시합니다. 원본은 보존되어 있습니다.</p>':''}</section>`:'';
-    root.innerHTML = `${data.testArchive?'<aside class="card ops-upload"><strong>보관된 검증 기록 · 읽기 전용</strong><p>원본과 사진은 보존되며 실제 관제·보고·결산 합계에서 제외됩니다.</p><a class="btn compact" href="#test-data">검증 자료 보관함</a></aside>':''}<header class="page-title"><h1>${esc(title)}</h1><p>${type} 상세${address ? ' · ' + esc(address) : ''}</p>
+    root.innerHTML = `${data.testArchive?'<aside class="card ops-upload"><strong>보관된 검증 기록 · 읽기 전용</strong><p>원본과 사진은 보존되며 실제 관제·보고·결산 합계에서 제외됩니다.</p><a class="btn compact" href="#test-data">검증 자료 보관함</a></aside>':''}<header class="page-title"><h1>${earningsAccount ? '내 수익' : esc(title)}</h1><p>${earningsAccount ? esc(title) : type+' 상세'}${address ? ' · ' + esc(address) : ''}</p>
       ${nextDue ? `<p>다음 예정일 · ${esc(nextDue)}</p>` : ''}
-      ${example ? '<p>서식 테스트 · 예시 데이터</p>' : ''}</header>
+      ${example ? '<p>서식 테스트 · 예시 데이터</p>' : ''}</header>${earningsSummary}
       <section class="card ops-upload stack"><div class="row between"><h2>${kind === 'report' ? '등록 내용' : '작업 이력'}</h2>
       ${kind !== 'report' && !example ? `<label class="field"><span>조회 월</span><input type="month" data-detail-month value="${esc(month)}"></label>` : ''}</div>
       ${work || '<p class="muted">이 달에 등록된 작업 결과가 없습니다.</p>'}
@@ -174,7 +179,7 @@ export async function mountControlDetail(root, route, api, signal, movedZone) {
     mountEvidenceZoneEditors(root.querySelector('[data-report-equipment]'),api,signal,change=>mountControlDetail(root,route,api,signal,change));
     root.querySelector('[data-zone-moved]')?.focus();
     root.querySelector('[data-detail-month]')?.addEventListener('change', event => {
-      if (event.target.value) location.hash = detailHref(kind, id, event.target.value);
+      if (event.target.value) location.hash = earningsAccount ? '#payments?month='+event.target.value : detailHref(kind, id, event.target.value);
     }, { signal });
     root.querySelector('[data-target-revision]')?.addEventListener('submit', async event => {
       event.preventDefault();
@@ -277,7 +282,7 @@ export function mountControl(root, account, api, signal) {
       <div class="row between"><h2 id="control-actions-title">처리할 업무</h2><button class="btn compact" type="button" data-refresh-control>새로고침</button></div>
       <div class="control-actions" data-control-actions><p class="small muted">현장 보고와 메일 상태를 불러오는 중입니다.</p></div>
     </section>` : ''}
-    ${admin ? '' : fieldGuidePage(detailHref('worker',account.id,currentDay))}
+    ${admin ? '' : fieldGuidePage()}
     ${admin ? `<div class="control-tabs" role="tablist" aria-label="관리자 업무">
       ${[['home','오늘 할 일'],['sites','현장·배정'],['reviews','승인·증빙'],['finance','정산'],['mail','메일'],['settings','운영 설정']].map(([id,label])=>
         `<button class="btn compact" type="button" role="tab" id="control-tab-${id}" data-control-tab="${id}" aria-controls="control-panel-${id}" aria-selected="${id==='home'}" tabindex="${id==='home' ? '0' : '-1'}">${label}</button>`).join('')}
@@ -622,9 +627,7 @@ export function mountControl(root, account, api, signal) {
         `<article class="report-control-row row between"><div><strong>${esc(row.siteName)}</strong>
         <p class="small">${esc(row.workDate)} · 완료 ${row.units} / ${row.plannedUnits}기 · 남은 수량 ${row.plannedUnits - row.units}기</p></div>
         <button class="btn compact" type="button" data-resume-report="${esc(row.siteId)}" data-work-date="${currentDay}">이어서 완료 보고</button></article>`).join('')}` : '';
-      if (!admin) {
-        root.querySelector('[data-worker-earnings]').innerHTML = workerEarningsMarkup(data.earnings,month.value,Boolean(account.canSwitchMode));
-      }
+      guide?.setReports(data.reports);
       if (admin) {
         if (!settingsDirty) {
           settings.elements.email.value = data.adminEmail;

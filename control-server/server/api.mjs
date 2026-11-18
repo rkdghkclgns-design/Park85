@@ -433,6 +433,9 @@ export async function handleApi(request, env, handleControl, handleWorkflows) {
     throw new HttpError(404, '요청한 기능을 찾을 수 없습니다.');
   } catch (error) {
     if (error instanceof HttpError) return json({ error: error.message }, error.status);
+    if (error.message?.includes('FLOOR_PLAN_EXCEEDS_SITE_QUANTITY')) {
+      return json({error:'건물 배정 수량은 등록된 층별 배정 합계 이상이어야 합니다. 해당 현장의 수량을 확인해 주세요.'},409);
+    }
     if (error.message?.includes('ARCHIVED_TEST_READ_ONLY')) return json({error:'보관된 검증 기록은 읽기 전용입니다. 새 테스트는 검증 작업공간에서 진행해 주세요.'},409);
     console.error('본연 API 오류', error.name);
     return json({ error: '서버에서 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.' }, 500);

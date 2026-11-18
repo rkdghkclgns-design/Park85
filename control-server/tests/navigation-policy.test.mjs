@@ -20,7 +20,9 @@ test('cleaner navigation contains own payment history and keeps help out of prim
   const options={independentPortal:true,verification:false,month:'2026-11'};
   const items=navigationItems(account,options);
   assert.deepEqual(items.map(item=>item.key),['control','map','payments','history','more']);
-  assert.equal(items.find(item=>item.key==='payments').href,'#control-detail/worker/verification%3Aworker%40example.invalid?month=2026-11');
+  assert.equal(items.find(item=>item.key==='payments').href,'#payments');
+  assert.equal(items.find(item=>item.key==='payments').shortLabel,'내 수익');
+  assert.equal(resolveNavigationRoute('payments?month=2026-10',account,options),'payments?month=2026-10');
   assert.equal(resolveNavigationRoute('history',account,options),'control');
   assert.equal(resolveNavigationRoute('days',account,options),'control');
   assert.equal(resolveNavigationRoute('more',account,options),'more');

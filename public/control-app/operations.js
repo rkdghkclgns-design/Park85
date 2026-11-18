@@ -1,5 +1,6 @@
 import { independentPortal, portalFetch, portalSignedOut, setPortalAccount, storePortalSession } from './portal-api.js';
-import { esc } from './ui.js';
+import { esc, today } from './ui.js';
+import { floorRows, floorOptions } from './worker-floors.js';
 import { mountRegions, mountRegionPreview } from './regions.js';
 import { controlDetailPage, controlPage, detailHref, mountControl, mountControlDetail } from './control.js';
 import { mountSignupReview } from './signup.js';
@@ -74,6 +75,7 @@ export function operationsPage(route, account) {
   if (route === 'test-data') return testDataPage(account);
   if (route === 'about') return brochure();
   if (route === 'control') return controlPage(account);
+  if (route === 'payments' || route.startsWith('payments?')) return controlDetailPage(account);
   if (route === 'analytics') return analyticsPage(account);
   if (route.startsWith('control-detail/')) return controlDetailPage(account);
   if (route === 'users') {
@@ -243,10 +245,11 @@ function popupContent(site, account) {
   const content = document.createElement('div');
   const canViewDetail = ['owner', 'admin', 'cleaner'].includes(account.role);
   const title = document.createElement(canViewDetail ? 'a' : 'strong');
-  if (canViewDetail) title.href = detailHref('site', site.id, site.reportDate);
+  if (canViewDetail) title.href = detailHref(site.reportId?'report':'site',site.reportId || site.id,site.reportDate || site.dueDate);
   title.textContent = site.name;
   content.append(title);
-  for (const value of [site.address || '주소 미등록', statusText(site), ...siteDetails(site)]) {
+  const details = site.floors ? ['예정일 · '+site.dueDate, ...site.floors.map(f=>f.name+' · '+f.units+'기')] : siteDetails(site);
+  for (const value of [site.address || '주소 미등록', statusText(site), ...details]) {
     if (!value) continue;
     const line = document.createElement('div');
     line.textContent = value;
@@ -255,14 +258,45 @@ function popupContent(site, account) {
   return content;
 }
 
+function workerMapCard(site) {
+  const status = site.status==='done' ? '완료' : site.status==='delayed' ? '지연 '+site.delayDays+'일' : '미작업';
+  const scope = [...new Set(site.floors.flatMap(floor=>[floorOptions.scope[floor.scope],floor.repair?'수리':'']).filter(Boolean))];
+  return `<article class="report-control-row stack worker-map-site">
+    <div class="row between"><h3>${esc(site.name)}</h3><span class="work-status worker-${site.status}"><i></i>${status}</span></div>
+    <p>${esc(site.address || '주소 미등록')}</p>
+    <p class="small muted">작업 예정일 ${esc(site.dueDate)}${site.projected?' · 반복 주기로 계산한 예정일':''}
+      ${site.completedDate?' · 완료 '+esc(site.completedDate):''}${site.reportStatus==='submitted'?' · 승인 대기':''}
+      ${site.progressUnits?' · 부분 완료 '+site.progressUnits+'기':''}</p>
+    ${scope.length?`<p class="small">${scope.join(' · ')}</p>`:''}
+    ${floorRows(site.floors) || (site.plannedUnits!=null ? `<p class="small">배정 ${site.plannedUnits}기 · 층별 설비 미등록</p>` : '')}
+    ${site.repeatDays?`<p class="small">정기 배정 · ${site.repeatDays}일마다</p>`:''}
+    ${site.workNote?`<div><strong class="small">작업 안내</strong><p class="small guide-note">${esc(site.workNote)}</p></div>`:''}
+    ${site.delayReason?`<p class="small">지연 사유 · ${esc(site.delayReason)}</p>`:''}
+    <div class="row"><button class="btn compact" type="button" data-site="${esc(site.id)}">지도에서 보기</button>
+      <a class="btn compact" href="${esc(detailHref(site.reportId?'report':'site',site.reportId || site.id,site.dueDate))}">상세 보기</a></div>
+  </article>`;
+}
+
 function mountMap(root, account, controller) {
   const editable = ['owner', 'admin', 'editor'].includes(account.role);
+  const workerMap = account.role==='cleaner';
+  const mapStates = workerMap ? ['done','delayed','pending'] : Object.keys(states);
+  const mapColors = {pending:'#d6a516',delayed:'#c33232',done:'#158060'};
+  let month=today().slice(0,7);
   root.innerHTML = `<div class="ops-grid">
-    <section class="card map-card" aria-label="현장 작업 지도">
+    <section class="card map-card${workerMap ? ' worker-map' : ''}" aria-label="현장 작업 지도">
+      ${workerMap ? `<div class="stack worker-map-summary">
+        <h2>${esc(account.name || '작업자')} 담당 현장</h2>
+        <div class="row worker-month-switch">
+          <button type="button" class="btn compact" data-map-month="-1" aria-label="이전 달">‹</button>
+          <strong data-map-month-label aria-live="polite"></strong>
+          <button type="button" class="btn compact" data-map-month="1" aria-label="다음 달">›</button>
+        </div>
+      </div>` : ''}
       <div class="map-toolbar row between">
         <div class="row" role="group" aria-label="작업 상태 필터">
           <button type="button" class="btn compact" data-filter="all" aria-pressed="true">전체 <span data-count="all">0</span></button>
-          ${Object.entries(states).map(([key, value]) => `<button type="button" class="btn compact" data-filter="${key}" aria-pressed="false">${chip(key, value.label)} <span data-count="${key}">0</span></button>`).join('')}
+          ${mapStates.map(key => `<button type="button" class="btn compact" data-filter="${key}" aria-pressed="false">${workerMap ? `<span class="work-status worker-${key}"><i></i>${key==='done'?'완료':states[key].label}</span>` : chip(key)} <span data-count="${key}">0</span></button>`).join('')}
         </div>
         <button type="button" class="btn compact" data-fit>현장 전체 보기</button>
       </div>
@@ -271,11 +305,11 @@ function mountMap(root, account, controller) {
     </section>
     <section class="card ops-list stack" aria-label="현장 목록">
       <div class="row between"><h2>현장 목록</h2><span class="small muted" data-site-total></span></div>
-      <label class="field"><span>현장 검색</span><input type="search" data-search placeholder="현장명, 주소, ID 또는 작업자"></label>
-      <label class="field"><span>작업자 검색</span><input type="search" data-worker-search placeholder="담당자 또는 보고 작성자 이름"></label>
+      ${workerMap ? '' : `<label class="field"><span>현장 검색</span><input type="search" data-search placeholder="현장명, 주소, ID 또는 작업자"></label>
+      <label class="field"><span>작업자 검색</span><input type="search" data-worker-search placeholder="담당자 또는 보고 작성자 이름"></label>`}
       <div data-site-list class="site-list"></div>
     </section>
-    <section class="card ops-upload stack" data-region-preview></section>
+    ${workerMap ? '' : '<section class="card ops-upload stack" data-region-preview></section>'}
     ${editable ? `<section class="card ops-upload stack">
       <div class="row between"><h2>현장 데이터 업로드</h2><a class="btn compact" href="./site-upload-template.csv" download>CSV 양식 다운로드</a></div>
       <p class="small muted">CSV 또는 XLSX 첫 번째 시트에 현장ID·현장명·위도·경도를 입력해 주세요. 지연 사유, 작업자, 완료일과 작업 메모도 올릴 수 있습니다. 정기 배정 현장은 관제의 일정과 승인 결과로 상태를 표시합니다.</p>
@@ -296,6 +330,7 @@ function mountMap(root, account, controller) {
     zoomControl: false,
     scrollWheelZoom: true,
     touchZoom: true,
+    zoomAnimation: !workerMap,
   }).setView([36.45, 127.85], 7);
   if (map) {
     leaf.control.zoom({
@@ -319,14 +354,14 @@ function mountMap(root, account, controller) {
   const markers = new Map();
   const normalized = value => String(value ?? '').normalize('NFKC').toLocaleLowerCase('ko-KR').trim();
   const matches = () => {
-    const term = normalized(search.value);
-    const worker = normalized(workerSearch.value);
+    const term = normalized(search?.value);
+    const worker = normalized(workerSearch?.value);
     return sites.filter(site => (selected === 'all' || site.status === selected)
       && (!term || [site.name, site.address, site.id, site.assignee, site.reportWorker].some(value => normalized(value).includes(term)))
       && (!worker || [site.assignee, site.reportWorker].some(value => normalized(value).includes(worker))));
   };
   function fit(rows) {
-    if (map && rows.length) map.fitBounds(rows.map(site => [site.lat, site.lng]), { padding: [26, 26], maxZoom: 15 });
+    if (map && rows.length) map.fitBounds(rows.map(site => [site.lat, site.lng]), { padding: [26, 26], maxZoom: 15, animate: !workerMap });
   }
   function showSites() {
     const rows = matches();
@@ -334,7 +369,7 @@ function mountMap(root, account, controller) {
     for (const site of sites) totals[site.status]++;
     root.querySelectorAll('[data-count]').forEach(node => { node.textContent = totals[node.dataset.count]; });
     root.querySelector('[data-site-total]').textContent = `${rows.length}곳`;
-    listing.innerHTML = rows.length ? rows.map(site => `<button class="site-list-row" type="button" data-site="${esc(site.id)}">
+    listing.innerHTML = workerMap ? (rows.map(workerMapCard).join('') || '<p class="muted small">이 달에 선택한 상태의 담당 현장이 없습니다.</p>') : rows.length ? rows.map(site => `<button class="site-list-row" type="button" data-site="${esc(site.id)}">
       <span><strong>${esc(site.name)}</strong><span class="small muted">${esc(site.address || site.id)}</span>
       ${siteDetails(site).map(line => `<span class="small muted">${esc(line)}</span>`).join('')}</span>
       ${chip(site.status, statusText(site))}</button>`).join('') : `<p class="muted small">${sites.length ? '조건에 맞는 현장이 없습니다.' : '업로드된 현장이 없습니다.'}</p>`;
@@ -351,7 +386,7 @@ function mountMap(root, account, controller) {
       const entry = markers.get(site.id);
       if (entry?.data === data) continue;
       entry?.layer.remove();
-      const color = states[site.status].color;
+      const color = workerMap ? mapColors[site.status] : states[site.status].color;
       const layer = leaf.circleMarker([site.lat, site.lng], {
         radius: 9, color: '#fff', weight: 2.5, fillColor: color, fillOpacity: 1,
       }).addTo(map).bindPopup(popupContent(site, account));
@@ -364,8 +399,11 @@ function mountMap(root, account, controller) {
     if (inFlight && afterPending) await inFlight;
     if (inFlight || controller.signal.aborted) return;
     inFlight = (async () => {
+      const requestedMonth=month;
       try {
-        const payload = await api('sites', { signal: controller.signal });
+        const path=workerMap ? 'work/map?'+new URLSearchParams({month:requestedMonth}) : 'sites';
+        const payload = await api(path, { signal: controller.signal });
+        if (controller.signal.aborted || requestedMonth!==month) return;
         const snapshot = JSON.stringify(payload.sites);
         if (snapshot !== lastSnapshot) {
           const firstSites = sites.length === 0 && payload.sites.length > 0;
@@ -377,7 +415,7 @@ function mountMap(root, account, controller) {
         loaded = true;
         sync.textContent = '자동 갱신 · ' + dateTime.format(new Date(payload.checkedAt)) + ' 확인';
       } catch (error) {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || requestedMonth!==month) return;
         if (error.status === 401 || error.status === 403) {
           sites = [];
           lastSnapshot = '';
@@ -397,17 +435,33 @@ function mountMap(root, account, controller) {
     });
   });
   root.querySelector('[data-fit]').addEventListener('click', () => fit(matches()));
-  search.addEventListener('input', showSites);
-  workerSearch.addEventListener('input', showSites);
+  search?.addEventListener('input', showSites);
+  workerSearch?.addEventListener('input', showSites);
+  if (workerMap) {
+    const monthLabel=root.querySelector('[data-map-month-label]');
+    const drawMonth=()=>{const [y,m]=month.split('-');monthLabel.textContent=y+'년 '+Number(m)+'월';};
+    drawMonth();
+    for (const button of root.querySelectorAll('[data-map-month]')) button.addEventListener('click',async()=>{
+      const [year,number]=month.split('-').map(Number);
+      month=new Date(Date.UTC(year,number-1+Number(button.dataset.mapMonth),1)).toISOString().slice(0,7);
+      drawMonth();
+      sites=[];
+      loaded=false;
+      lastSnapshot='';
+      showSites();
+      sync.textContent='담당 현장을 불러오는 중입니다.';
+      await refresh({ center:true,afterPending:true });
+    },{signal:controller.signal});
+  }
   listing.addEventListener('click', event => {
     const button = event.target.closest('[data-site]');
     const site = button && sites.find(item => item.id === button.dataset.site);
     if (!map || !site) return;
-    map.setView([site.lat, site.lng], Math.max(14, map.getZoom()));
+    map.setView([site.lat, site.lng], Math.max(14, map.getZoom()),{animate:!workerMap});
     markers.get(site.id)?.layer.openPopup();
   });
   if (editable) setupUpload(root, refresh);
-  mountRegionPreview(root.querySelector('[data-region-preview]'), api, controller.signal);
+  if (!workerMap) mountRegionPreview(root.querySelector('[data-region-preview]'), api, controller.signal);
   showSites();
   refresh();
   const interval = setInterval(() => { if (!document.hidden) refresh(); }, 5000);
@@ -608,6 +662,9 @@ export function mountOperations(root, route, account) {
   const controller = new AbortController();
   let dispose;
   if (route === 'map') dispose = mountMap(root, account, controller);
+  if (route === 'payments' || route.startsWith('payments?')) {
+    mountControlDetail(root,'control-detail/worker/'+encodeURIComponent(account.id)+route.slice('payments'.length),api,controller.signal,undefined,account);
+  }
   if (route === 'control') mountControl(root, account, api, controller.signal);
   if (route === 'analytics') mountAnalytics(root, api, controller.signal);
   if (route === 'test-data') mountTestData(root, account, api, controller.signal);

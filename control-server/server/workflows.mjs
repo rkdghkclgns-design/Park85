@@ -2,6 +2,7 @@ import { displayWorkResults, normalizeWorkResults } from './work-results.mjs';
 import { reconcileSettlement } from './settlement-reconciliation.mjs';
 import { archivedEvidenceDb } from './operational-data.mjs';
 import { cameraPhotoKey, captureSelectionIds, handleCameraWork, readCaptureSelection, validateProofJpeg, validateWorkZone } from './camera.mjs';
+import { floorPlanTotal, floorProjection, managedFloor, requireAssignedFloor, saveFloorPlan, siteFloors, workerMonthMap } from './worker-field.mjs';
 import { internalWorkUnits, readWorkCompletion, workerCanMoveEvidenceZone } from './progress.mjs';
 
 const photoSlots = ['exteriorBefore', 'exteriorAfter', 'interiorBefore', 'interiorAfter'];
@@ -44,6 +45,11 @@ async function readWorkflows(db, month, account, admin, ownerEmail) {
     SELECT w.id, w.name, w.address, p.worker_name AS workerName, p.next_due AS nextDue,w.work_note AS siteNote,
            w.planned_units AS configuredUnits,COALESCE(g.planned_units,w.planned_units) AS plannedUnits,g.units AS progressUnits,
            p.start_date AS startDate, p.repeat_days AS repeatDays, p.instructions,
+           ${siteFloors('w')} AS floorData,
+           ${admin ? "'[]'" : `(SELECT json_group_array(json_object('zoneId',counts.zoneId,'completed',counts.units))
+             FROM (SELECT e.zone_id AS zoneId, COUNT(DISTINCT e.asset_code) AS units FROM charger_evidence e
+             WHERE e.site_id=w.id AND (g.site_id IS NOT NULL OR e.author_id=?)
+               AND e.work_date>=COALESCE(g.first_date,p.evidence_from,p.next_due) GROUP BY e.zone_id) counts)`} AS floorProgress,
            CASE WHEN p.delay_date = p.next_due THEN p.delay_reason ELSE '' END AS delayReason,
            (SELECT r.status FROM field_reports r WHERE r.site_id=w.id AND r.assignment_due=p.next_due
              ORDER BY r.work_date DESC LIMIT 1) AS currentReportStatus
@@ -52,7 +58,7 @@ async function readWorkflows(db, month, account, admin, ownerEmail) {
     ${admin ? '' : "WHERE p.worker_email = ?"}
     ORDER BY w.name, w.id
   `);
-  const sites = await (admin ? siteQuery : siteQuery.bind(account.email)).all();
+  const sites = await (admin ? siteQuery : siteQuery.bind(account.id,account.email)).all();
   const photos = await db.prepare(`
     SELECT e.id, e.site_id AS siteId, w.name AS siteName, e.work_date AS workDate, e.asset_code AS assetCode,
            COALESCE('충전기 ' || e.device_number,e.asset_code) AS assetLabel,
@@ -70,7 +76,8 @@ async function readWorkflows(db, month, account, admin, ownerEmail) {
     WHERE e.work_date LIKE ? ${admin ? '' : 'AND e.author_id = ?'}
     ORDER BY e.work_date DESC, w.name, e.asset_code LIMIT 201
   `).bind(Number(admin),account.id,account.email,month + '-%', ...(admin ? [] : [account.id])).all();
-  const data = { sites: sites.results, evidence: photos.results.slice(0, 200).map(({ capturedPhotos,safetyChecklist, ...row }) => ({ ...row,
+  const data = { sites: sites.results.map(({floorData,floorProgress,...site})=>({ ...site,
+    floors:JSON.parse(floorData),floorProgress:JSON.parse(floorProgress) })), evidence: photos.results.slice(0, 200).map(({ capturedPhotos,safetyChecklist, ...row }) => ({ ...row,
     photos: JSON.parse(capturedPhotos), safetyChecklist:JSON.parse(safetyChecklist), workResults: displayWorkResults(row).items })),
     evidenceOverflow: photos.results.length > 200 };
   if (admin) {
@@ -227,6 +234,7 @@ async function saveWorkEvidence(request, env, account, admin, context) {
   const existing=await registered();
   if (existing) return existing;
   await validateWorkZone(db,siteId,zoneId,HttpError);
+  await requireAssignedFloor(db,{siteId,zoneId,chargerType,canopy,exterior,interior},HttpError);
   if (usesCamera) try {
     await readCaptureSelection(db,form.get('captureIds'),[siteId,workDate,assetCode,zoneId,account.id],activeSlots,HttpError);
   } catch(error) {
@@ -259,6 +267,18 @@ async function saveWorkEvidence(request, env, account, admin, context) {
         AND (? OR EXISTS (SELECT 1 FROM work_plan_cycles p WHERE p.site_id=w.id AND p.worker_email=?
           AND p.next_due=? AND COALESCE(NULLIF(p.instructions,''),w.work_note,'')=?))
         AND (? IS NULL OR EXISTS (SELECT 1 FROM work_zones z WHERE z.id=? AND z.site_id=w.id AND z.deleted_at IS NULL))
+        AND (COALESCE(g.planned_units,w.planned_units) IS NULL OR ${floorPlanTotal('w.id')}=0
+          OR ${managedFloor('w.id','?')}
+          OR (SELECT COUNT(DISTINCT e.asset_code) FROM charger_evidence e
+            WHERE e.site_id=w.id AND e.work_date>=COALESCE(g.first_date,cycle.evidence_from,?)
+              AND NOT (${managedFloor('w.id','e.zone_id')}))
+            < COALESCE(g.planned_units,w.planned_units)-${floorPlanTotal('w.id')})
+        AND NOT EXISTS (SELECT 1 FROM work_zones floor WHERE floor.id=? AND floor.site_id=w.id
+          AND floor.planned_units IS NOT NULL AND (
+            floor.charger_type<>? OR floor.canopy_scope<>?
+            OR (floor.cleaning_scope<>'interior')<>? OR (floor.cleaning_scope<>'exterior')<>?
+            OR (SELECT COUNT(DISTINCT e.asset_code) FROM charger_evidence e WHERE e.site_id=w.id AND e.zone_id=floor.id
+              AND e.work_date>=COALESCE(g.first_date,cycle.evidence_from,?))>=floor.planned_units))
         AND NOT EXISTS (SELECT 1 FROM settlement_months WHERE month = substr(?, 1, 7))
         AND NOT EXISTS (SELECT 1 FROM field_reports r WHERE r.site_id=w.id AND ? BETWEEN COALESCE(r.progress_from,r.work_date) AND r.work_date AND r.status='approved')
         AND ? >= COALESCE(g.first_date,cycle.evidence_from,?)
@@ -273,11 +293,12 @@ async function saveWorkEvidence(request, env, account, admin, context) {
       Number(interior), issue, nowIso(), chargerType, canopy, JSON.stringify(workResults), zoneId, captureJson, account.name || account.email,
       assetCode,assetCode,internalWork,JSON.stringify(safetyChecklist),submissionHash,
       siteId,Number(admin),account.email,guidance?.assignmentDue ?? null,guidance?.instructions ?? null,zoneId,zoneId,
+      zoneId,workDate,zoneId,chargerType,canopy,Number(exterior),Number(interior),workDate,
       workDate,workDate,workDate,workDate,assetCode,workDate,workDate,captureJson,workDate,assetCode,zoneId,account.id,captured.length).run();
     if (!result.meta.changes) {
       const concurrent=await registered();
       if (concurrent) {await Promise.allSettled(photos.map(([slot])=>bucket.delete(objectKey(id,slot))));return concurrent;}
-      throw new HttpError(409, '이미 등록된 충전기이거나, 승인·마감된 작업 또는 배정이 변경된 현장입니다.');
+      throw new HttpError(409, '이미 등록된 충전기이거나, 승인·마감 또는 층별 배정 수량·작업 범위가 변경된 현장입니다.');
     }
   } catch (error) {
     const receipt=await db.prepare('SELECT submission_hash FROM charger_evidence WHERE id=? AND author_id=?')
@@ -327,18 +348,42 @@ async function moveWorkEvidenceZones(db,{ zoneId,moves },account,admin,{ HttpErr
     .bind(zoneId,siteId).first();
   if (!target) throw new HttpError(400,'이 현장에 등록된 구역을 선택해 주세요.');
   const { results:changed } = await db.prepare(`
-    WITH eligible AS (
+    WITH destination AS (
+      SELECT z.id,z.site_id,z.planned_units,z.charger_type,z.canopy_scope,z.cleaning_scope,
+        COALESCE(g.first_date,p.evidence_from) AS cycle_start,
+        COALESCE(g.planned_units,w.planned_units) AS site_units,${floorPlanTotal('w.id')} AS allocated_units
+      FROM work_zones z JOIN work_sites w ON w.id=z.site_id LEFT JOIN work_plan_cycles p ON p.site_id=z.site_id
+      LEFT JOIN work_progress g ON g.site_id=z.site_id
+      WHERE z.id=? AND z.deleted_at IS NULL
+    ), eligible AS (
       SELECT e.id FROM charger_evidence e JOIN json_each(?) item ON e.id=json_extract(item.value,'$.id')
+      JOIN destination z ON z.site_id=e.site_id
       WHERE (e.zone_id IS json_extract(item.value,'$.fromZoneId') OR e.zone_id=?)
         AND ${openEvidencePeriod} AND (? OR (${workerCanMoveEvidenceZone}))
-        AND EXISTS (SELECT 1 FROM work_zones z WHERE z.id=? AND z.site_id=e.site_id AND z.deleted_at IS NULL)
+        AND (e.zone_id=z.id OR z.cycle_start IS NULL OR e.work_date<z.cycle_start
+          OR (z.planned_units IS NULL AND (z.site_units IS NULL OR z.allocated_units<z.site_units))
+          OR (e.charger_type=z.charger_type AND e.canopy=z.canopy_scope
+            AND e.exterior=(z.cleaning_scope<>'interior') AND e.interior=(z.cleaning_scope<>'exterior')))
+    ), target_capacity AS (
+      SELECT (z.cycle_start IS NULL
+        OR (z.planned_units IS NULL AND (z.site_units IS NULL OR z.allocated_units=0))
+        OR NOT EXISTS(SELECT 1 FROM charger_evidence m WHERE m.id IN (SELECT id FROM eligible)
+          AND m.zone_id IS NOT z.id AND m.work_date>=z.cycle_start
+          AND (z.planned_units IS NOT NULL OR ${managedFloor('z.site_id','m.zone_id')}))
+        OR (SELECT COUNT(DISTINCT p.asset_code) FROM charger_evidence p
+          WHERE p.site_id=z.site_id AND p.work_date>=z.cycle_start
+            AND (p.id IN(SELECT id FROM eligible)
+              OR (z.planned_units IS NOT NULL AND p.zone_id=z.id)
+              OR (z.planned_units IS NULL AND NOT (${managedFloor('z.site_id','p.zone_id')}))))
+          <=COALESCE(z.planned_units,z.site_units-z.allocated_units)) AS fits
+      FROM destination z
     )
     UPDATE charger_evidence AS e SET zone_id=?,history_actor=CASE WHEN e.zone_id IS NOT ? THEN ? ELSE e.history_actor END
-    WHERE e.id IN (SELECT id FROM eligible) AND (SELECT COUNT(*) FROM eligible)=?
+    WHERE e.id IN (SELECT id FROM eligible) AND (SELECT COUNT(*) FROM eligible)=? AND (SELECT fits FROM target_capacity)
     RETURNING id
-  `).bind(selected,zoneId,Number(admin),account.id,account.email,zoneId,zoneId,zoneId,account.name || account.email,moves.length).all();
+  `).bind(zoneId,selected,zoneId,Number(admin),account.id,account.email,zoneId,zoneId,account.name || account.email,moves.length).all();
   if (changed.length!==moves.length) {
-    throw new HttpError(409,'작업 기록이나 구역이 변경되었습니다. 최신 내역을 열어 다시 시도해 주세요.');
+    throw new HttpError(409,'작업 기록이나 대상 층의 배정 수량·작업 범위가 맞지 않습니다. 최신 내역을 확인해 주세요.');
   }
   return { zoneId,zoneName:target.name };
 }
@@ -580,6 +625,12 @@ export async function handleWorkflows(path, request, env, account, context) {
   if (path === '/api/work/completion-counts' && method === 'GET') {
     return json(await readWorkCompletion(db,url.searchParams.get('siteId'),url.searchParams.get('workDate'),account,context));
   }
+  if (path === '/api/work/map' && method === 'GET') {
+    if (account.role!=='cleaner') throw new HttpError(403,'작업자 화면에서 확인해 주세요.');
+    const month=url.searchParams.get('month') || koreaDate().slice(0,7);
+    if (!hasMonth(month,validDate)) throw new HttpError(400,'조회할 월을 확인해 주세요.');
+    return json({ sites:await workerMonthMap(db,account,month,koreaDate()),checkedAt:nowIso() });
+  }
   if (path === '/api/work/overview' && method === 'GET') {
     const month = url.searchParams.get('month') || koreaDate().slice(0, 7);
     if (!hasMonth(month, validDate)) throw new HttpError(400, '조회할 월을 확인해 주세요.');
@@ -609,14 +660,25 @@ export async function handleWorkflows(path, request, env, account, context) {
     return await readWorkPhoto(env, url.searchParams.get('id'), url.searchParams.get('slot'), account, admin, context);
   }
   requireRole(account, 'admin');
+  if (path === '/api/work/floor-plan' && method === 'PUT') {
+    const zone=await saveFloorPlan(db,await readJson(request,env),account,context);
+    return json({ zone });
+  }
+  if (path === '/api/work/floor-plan' && method === 'GET') {
+    const siteId=url.searchParams.get('siteId');
+    const { results }=await db.prepare(`SELECT ${floorProjection} FROM work_zones z
+      WHERE z.site_id=? AND z.deleted_at IS NULL ORDER BY z.name,z.id`).bind(siteId || '').all();
+    return json({ zones:results });
+  }
   if (path === '/api/work/site-quantity' && method === 'PATCH') {
     const { siteId, plannedUnits } = (await readJson(request,env)) ?? {};
     if (typeof siteId !== 'string' || !siteId || siteId.length > 80 || !Number.isInteger(plannedUnits) || plannedUnits < 1 || plannedUnits > 10000) {
       throw new HttpError(400, '현장과 배정 설비 수량을 1~10,000기 사이로 입력해 주세요.');
     }
-    const result = await db.prepare('UPDATE work_sites SET planned_units=?,history_actor=? WHERE id=?')
-      .bind(plannedUnits,account.name || account.email,siteId).run();
-    if (!result.meta.changes) throw new HttpError(404, '현장을 찾을 수 없습니다.');
+    const result = await db.prepare(`UPDATE work_sites SET planned_units=?,history_actor=? WHERE id=?
+      AND ?>=COALESCE((SELECT SUM(z.planned_units) FROM work_zones z WHERE z.site_id=? AND z.deleted_at IS NULL),0)`)
+      .bind(plannedUnits,account.name || account.email,siteId,plannedUnits,siteId).run();
+    if (!result.meta.changes) throw new HttpError(409,'현장을 확인하고 건물 배정 수량을 층별 합계 이상으로 입력해 주세요.');
     return json({ ok: true });
   }
   if (path === '/api/work/evidence/result' && method === 'PATCH') {

@@ -255,6 +255,24 @@ td.table-empty { padding: 12px; text-align: center; color: var(--muted); }
 .guide-site-button > span:first-child { min-width: 0; overflow-wrap: anywhere; }
 .guide-site-button small { display: block; margin-top: 4px; color: var(--muted, #526176); }
 .guide-site-button .work-status { flex-shrink: 0; }
+.worker-floors { list-style: none; margin: 0; padding: 0; }
+.worker-floors p, .worker-map-site p { margin: 3px 0 0; }
+.worker-map-summary { margin-bottom: 12px; }
+.worker-month-switch { justify-content: center; }
+.worker-month-switch .btn { min-width: 44px; min-height: 44px; }
+.worker-map .map-toolbar { gap: 8px; }
+.work-status.worker-pending { color: #876200; }
+.work-status.worker-pending i { background: #d6a516; }
+.work-status.worker-delayed { color: #a42323; }
+.work-status.worker-delayed i { background: #c33232; }
+.work-status.worker-done { color: #116650; }
+.work-status.worker-done i { background: #158060; }
+[data-managed-floor] [data-legacy-floor-fields], [data-floor-choice-required] [data-start-camera] { display: none; }
+@media (prefers-color-scheme: dark) {
+  .work-status.worker-pending { color: #f2ca5b; }
+  .work-status.worker-delayed { color: #ff9b93; }
+  .work-status.worker-done { color: #87d4b7; }
+}
 .guide-site-button:hover { border-color: var(--accent, #226656); }
 .guide-site-details dd { font-size: 1rem; overflow-wrap: anywhere; }
 .guide-details > summary { cursor: pointer; font-weight: 600; }

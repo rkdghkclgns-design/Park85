@@ -16,7 +16,7 @@ export const isLegacyRoute = route => ['home','days','month','alerts','legacy'].
 export function navigationItems(account,{independentPortal=false,verification=false,month}={}) {
   const row=(key,shortLabel,label,href='#'+key,icon=key)=>({key,shortLabel,label,href,icon});
   if (account.role==='cleaner') return [row('control','내 작업','내 작업'),row('map','지도','현장 작업 지도'),
-    row('payments','내 지급','내 지급 내역','#control-detail/worker/'+encodeURIComponent(account.id)+'?month='+month,'month'),
+    row('payments','내 수익','내 수익','#payments','month'),
     row('history','작업 이력','작업 이력','#history','days'),row('more','더보기','도움말·더보기','#more','about')];
   if (independentPortal || verification) {
     const keys=managerRoles.has(account.role) ? ['control','map','analytics','users'] : ['map','regions'];
@@ -31,6 +31,7 @@ export function resolveNavigationRoute(hash,account,{independentPortal=false,ver
   if (!hash && /^[a-f0-9]{64}$/.test(mail)) return 'control-detail/mail/'+mail;
   if (/^control-detail\/(site|worker|report|mail|archive)\/[^/?]+(?:\?month=\d{4}-\d{2})?$/.test(hash)) return hash;
   if (hash==='history' && account.role==='cleaner') return 'control';
+  if (/^payments(?:\?month=\d{4}-\d{2})?$/.test(hash) && account.role==='cleaner') return hash;
   if (verification && !['control','map','regions','users','analytics','about','more'].includes(hash)) return 'control';
   if (account.role==='cleaner' && !['control','map','regions','about','more'].includes(hash)) return 'control';
   if (!hash && account.nativeLogin) return managerRoles.has(account.role) || account.role==='cleaner' ? 'control' : 'map';

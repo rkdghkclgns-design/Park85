@@ -15,7 +15,7 @@ function node() {
   const children=new Map();
   return {hidden:false,dataset:{},innerHTML:'',textContent:'',focus(){},scrollIntoView(){},
     querySelector(selector){if(!children.has(selector))children.set(selector,node());return children.get(selector);},
-    querySelectorAll(){return [];},insertAdjacentHTML(){}};
+    querySelectorAll(){return [];},insertAdjacentHTML(){},toggleAttribute(){}};
 }
 function harness({local=storage(),server={instructions:'기존 현장 안내',version:'v1',confirmed:true},photos=new Map()}={}) {
   globalThis.location={pathname:'/control-app/'};globalThis.localStorage=local;globalThis.window=new EventTarget();
@@ -29,7 +29,7 @@ function harness({local=storage(),server={instructions:'기존 현장 안내',ve
   form.elements.zoneId.selectedOptions=[{textContent:'A구역'}];
   const draft=evidenceDrafts(form,'worker-a',{signal:signal.signal,getAssignmentDue:()=>assignmentDue});
   const context=()=>JSON.stringify(['siteId','workDate','assetCode','zoneId'].map(name=>form.elements[name].value));
-  const workflow={form,draft,checkSetup:()=>form.elements.guide_access.checked,setupValid:()=>form.elements.guide_access.checked,
+  const workflow={form,draft,assignedFloor:()=>null,checkSafety:()=>form.elements.guide_access.checked,safetyValid:()=>form.elements.guide_access.checked,checkSetup:()=>form.elements.guide_access.checked,setupValid:()=>form.elements.guide_access.checked,
     camera:{missingSlot:phase=>photos.get(context())?.includes(phase)?null:'exterior'+phase},
     async setEvidenceSite(id,date){
       draft.flush();form.elements.siteId.value=id;form.elements.workDate.value=date;form.elements.zoneId.value='';draft.restore();
@@ -90,7 +90,7 @@ test('changed work date restores the same charger, zone, notes and photo stage a
   const next=harness({local:first.local,server:first.server,photos:first.photos});await next.guide.restore();
   assert.equal(next.form.elements.workDate.value,'2026-11-12');assert.equal(next.form.elements.zoneId.value,'zone-a');
   assert.equal(next.form.elements.assetCode.value,saved.assetCode);assert.equal(next.form.elements.issue.value,'보존할 작업 메모');
-  assert.equal(next.step(),'작업 후 촬영');assert.deepEqual([...next.photos],[...first.photos]);
+  assert.equal(next.step(),'청소 후 촬영');assert.deepEqual([...next.photos],[...first.photos]);
   next.close();
 });
 
@@ -106,7 +106,7 @@ for (const retry of ['retry-site','restart']) test('an initial recovery guidance
   } else {
     first.server.fail=false;await next.action('retry-site');await next.action('continue');
   }
-  assert.equal(next.step(),'작업 후 촬영');assert.equal(next.form.elements.workDate.value,saved.workDate);
+  assert.equal(next.step(),'청소 후 촬영');assert.equal(next.form.elements.workDate.value,saved.workDate);
   assert.equal(next.form.elements.assetCode.value,saved.proof.assetCode);assert.equal(next.form.elements.zoneId.value,saved.proof.zoneId);
   assert.equal(next.form.elements.issue.value,'보존할 작업 메모');assert.deepEqual([...next.photos],photos);next.close();
 });
@@ -120,7 +120,7 @@ test('a guidance confirmation conflict keeps the recovered device until the late
   next.server.version='v3';next.server.instructions='최종 안전 안내';
   await next.action('continue');assert.deepEqual(next.flow(),saved,'a 409 refresh must preserve the original recovery');
   next.confirm();await next.action('continue');
-  assert.equal(next.step(),'충전기 안전 점검');assert.equal(next.form.elements.guide_access.checked,false);
+  assert.equal(next.step(),'현장 안전 수칙 확인');assert.equal(next.form.elements.guide_access.checked,false);
   assert.equal(next.form.elements.assetCode.value,saved.proof.assetCode);assert.equal(next.form.elements.zoneId.value,saved.proof.zoneId);
   assert.equal(next.form.elements.issue.value,'보존할 작업 메모');assert.deepEqual([...next.photos],photos);next.close();
 });
@@ -137,7 +137,7 @@ for(const changed of ['assignment','instructions'])test('a delayed confirmation 
   assert.equal(h.step(),expected,'the obsolete PUT reply must not restore the previous confirmation or stage');
   if(changed==='assignment')await h.guide.selectSite('site');
   h.confirm();await h.action('continue');assert.equal(h.requests.at(-1).body.version,'v2');
-  assert.equal(h.requests.at(-1).body.assignmentDue,h.server.assignmentDue || due);assert.equal(h.step(),'충전기 안전 점검');h.close();
+  assert.equal(h.requests.at(-1).body.assignmentDue,h.server.assignmentDue || due);assert.equal(h.step(),'현장 안전 수칙 확인');h.close();
 });
 
 test('a delayed inspection setup cannot reopen work after an assignment change',async()=>{
@@ -157,7 +157,7 @@ test('an instruction change during the initial guidance request invalidates its 
   assert.equal(h.requests.length,2,'changing instructions while GET is pending must reload current guidance');
   h.confirm();await h.action('continue');
   assert.equal(h.requests.at(-1).method,'PUT');assert.equal(h.requests.at(-1).body.version,'v2');
-  assert.equal(h.step(),'충전기 안전 점검');h.close();
+  assert.equal(h.step(),'현장 안전 수칙 확인');h.close();
 });
 
 test('a temporarily invalid date does not replace the last recoverable photo context',async()=>{
@@ -186,19 +186,19 @@ test('reread fetches changed guidance and requires renewed safety checks without
   assert.match(h.flow().guidanceVersion,/v1/,'old recovery remains intact until the new guidance is confirmed');
   assert.match(h.form.elements.issue.value,/보존할/);assert.equal(h.guide.canSave({siteId:'site'}),false);
   h.confirm();await h.action('continue');
-  assert.equal(h.requests.at(-1).body.version,'v2');assert.equal(h.step(),'충전기 안전 점검');
+  assert.equal(h.requests.at(-1).body.version,'v2');assert.equal(h.step(),'현장 안전 수칙 확인');
   assert.equal(h.form.elements.guide_access.checked,false);assert.equal(h.resets.length,1);
   assert.equal(h.form.elements.assetCode.value,proof.assetCode);assert.equal(h.form.elements.zoneId.value,proof.zoneId);
   assert.equal(h.form.elements.issue.value,'보존할 작업 메모');assert.deepEqual([...h.photos],photos);
   await h.action('back');await h.action('continue');
-  assert.equal(h.step(),'충전기 안전 점검','returning through site guidance must not bypass the renewed safety step');h.close();
+  assert.equal(h.step(),'현장 안전 수칙 확인','returning through site guidance must not bypass the renewed safety step');h.close();
 });
 
 test('unchanged guidance returns to the prior photo stage and failed refresh can retry without losing context',async()=>{
   const h=harness();await h.guide.selectSite('site');await h.action('continue');h.prepareProof();await h.action('to-before');
   const proof=h.draft.snapshot();h.server.fail=true;await h.action('reread');
   h.server.fail=false;await h.action('retry-site');await h.action('continue');
-  assert.equal(h.step(),'작업 전 촬영');assert.equal(h.resets.length,0);assert.equal(h.form.elements.assetCode.value,proof.assetCode);
+  assert.equal(h.step(),'청소 전 촬영');assert.equal(h.resets.length,0);assert.equal(h.form.elements.assetCode.value,proof.assetCode);
   assert.equal(h.form.elements.issue.value,'보존할 작업 메모');h.close();
 });
 
@@ -207,7 +207,7 @@ test('a model refresh with new instructions interrupts active work for confirmat
   const original=h.draft.snapshot();h.server.instructions='새 출입 및 안전 절차';h.server.version='v2';h.server.confirmed=false;
   h.setModel();await Promise.resolve();
   assert.equal(h.step(),'현장 정보와 청소 안내');assert.equal(h.guide.canSave({siteId:'site'}),false);
-  h.confirm();await h.action('continue');assert.equal(h.step(),'충전기 안전 점검');
+  h.confirm();await h.action('continue');assert.equal(h.step(),'현장 안전 수칙 확인');
   assert.equal(h.form.elements.assetCode.value,original.assetCode);assert.equal(h.form.elements.issue.value,'보존할 작업 메모');
   await h.action('home');h.server.instructions='다음 안내';h.server.version='v3';h.server.confirmed=false;
   const count=h.requests.length;h.setModel();await Promise.resolve();assert.equal(h.requests.length,count);h.close();
