@@ -1,3 +1,4 @@
+import { allowsSiteQuantity } from './field-integrity.mjs';
 import { validMailbox } from './addresses.mjs';
 import { handleSignup } from './signup.mjs';
 import { handleOperations } from './operations.mjs';
@@ -222,7 +223,8 @@ async function importSites(db, request, env, account) {
   const { rows } = (await readJson(request, env)) ?? {};
   const data = validateSites(rows);
   const updated = new Date().toISOString();
-  await db.prepare(`
+  const result=await db.prepare(`
+    WITH uploads AS (SELECT value FROM json_each(?))
     INSERT INTO work_sites (id, name, address, lat, lng, status, due_date, updated_at,
                             delay_reason, assignee, assignee_contact, completed_date, work_note, history_actor, planned_units)
     SELECT incoming.value ->> 'id', incoming.value ->> 'name', incoming.value ->> 'address',
@@ -233,9 +235,10 @@ async function importSites(db, request, env, account) {
                 THEN COALESCE(incoming.value ->> 'completedDate', existing.completed_date, '') ELSE '' END,
            COALESCE(incoming.value ->> 'workNote', existing.work_note, ''), ?,
            COALESCE(incoming.value ->> 'plannedUnits',existing.planned_units)
-    FROM json_each(?) AS incoming
+    FROM uploads AS incoming
     LEFT JOIN work_sites AS existing ON existing.id = incoming.value ->> 'id'
-    WHERE true
+    WHERE NOT EXISTS (SELECT 1 FROM uploads check_row JOIN work_sites w ON w.id=check_row.value ->> 'id'
+      WHERE NOT ${allowsSiteQuantity('w.id','w.planned_units',"COALESCE(check_row.value ->> 'plannedUnits',w.planned_units)")})
     ON CONFLICT(id) DO UPDATE SET name = excluded.name, address = excluded.address,
       lat = excluded.lat, lng = excluded.lng, status = excluded.status,
       due_date = excluded.due_date, updated_at = excluded.updated_at, history_actor = excluded.history_actor,
@@ -243,7 +246,8 @@ async function importSites(db, request, env, account) {
       delay_reason = COALESCE(excluded.delay_reason, work_sites.delay_reason),
       assignee = COALESCE(excluded.assignee, work_sites.assignee),
       assignee_contact = COALESCE(excluded.assignee_contact, work_sites.assignee_contact)
-  `).bind(updated, account.name || account.email, JSON.stringify(data)).run();
+  `).bind(JSON.stringify(data),updated,account.name || account.email).run();
+  if (!result.meta.changes) throw new HttpError(409,'업로드에서 저장된 층별 배정, 증빙 또는 확인 중인 보고와 수량이 충돌하는 현장을 확인해 주세요.');
   return json({ count: data.length, updatedAt: updated });
 }
 

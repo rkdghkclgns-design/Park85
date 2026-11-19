@@ -1,3 +1,5 @@
+import { floorEvidenceComplete } from './field-integrity.mjs';
+
 const progressText = value => typeof value === 'string' ? value.trim() : '';
 const progressNumber = value => Number.isSafeInteger(value) && value >= 0 && value <= 10000;
 const progressAdmin = account => ['owner', 'admin'].includes(account.role);
@@ -24,14 +26,18 @@ export async function readWorkerEarnings(db,month,account) {
     db.prepare(`
       SELECT r.worker_price AS rate,r.units,r.internal_work AS internal,r.internal_units,r.author_id,
         COALESCE(p.worker_breakdown,'[]') AS workers,
+        (SELECT COUNT(*) FROM charger_evidence e WHERE e.site_id=r.site_id
+          AND e.work_date BETWEEN COALESCE(r.progress_from,r.work_date) AND r.work_date) AS proofCount,
+        (SELECT COUNT(*) FROM charger_evidence e WHERE e.site_id=r.site_id AND e.author_id=? AND e.internal_work=0
+          AND e.work_date BETWEEN COALESCE(r.progress_from,r.work_date) AND r.work_date) AS ownExternal,
         (SELECT COUNT(*) FROM charger_evidence e WHERE e.site_id=r.site_id AND e.author_id=? AND e.internal_work=1
           AND e.work_date BETWEEN COALESCE(r.progress_from,r.work_date) AND r.work_date) AS ownInternal
       FROM field_reports r LEFT JOIN settlement_payments p ON p.report_id=r.id
       WHERE r.status='approved' AND r.work_date LIKE ? AND (r.author_id=? OR EXISTS (
         SELECT 1 FROM json_each(p.worker_breakdown) b WHERE json_extract(b.value,'$.email')=?) OR EXISTS(
-        SELECT 1 FROM charger_evidence e WHERE e.site_id=r.site_id AND e.author_id=? AND e.internal_work=1
+        SELECT 1 FROM charger_evidence e WHERE e.site_id=r.site_id AND e.author_id=?
           AND e.work_date BETWEEN COALESCE(r.progress_from,r.work_date) AND r.work_date))
-    `).bind(account.id,month+'-%',account.id,account.email,account.id).all(),
+    `).bind(account.id,account.id,month+'-%',account.id,account.email,account.id).all(),
   ]);
   const amount = rows => rows.reduce((sum,row) => row.units == null || row.rate == null ? sum : sum + BigInt(row.units)*BigInt(row.rate),0n).toString();
   const allocated = approved.flatMap(row => {
@@ -39,6 +45,10 @@ export async function readWorkerEarnings(db,month,account) {
     const own = workers.find(worker => worker.email === account.email);
     if (own) return [{ units:own.units,rate:row.rate,internal:Boolean(own.internal) }];
     if (workers.length) return [];
+    if (row.proofCount===row.units) return [
+      ...(row.ownInternal ? [{units:row.ownInternal,internal:true}] : []),
+      ...(row.ownExternal ? [{units:row.ownExternal,rate:row.rate,internal:false}] : []),
+    ];
     const ownInternal = row.ownInternal || (row.author_id===account.id && row.internal ? row.internal_units : 0);
     return [...(ownInternal ? [{ units:ownInternal,internal:true }] : []),
       ...(!row.internal && row.author_id===account.id && row.units>row.internal_units ? [{ units:row.units-row.internal_units,rate:row.rate,internal:false }] : [])];
@@ -66,16 +76,18 @@ export async function readWorkCompletion(db, siteId, day, account, context) {
     SELECT COALESCE(g.planned_units,w.planned_units) AS plannedUnits,p.next_due AS assignmentDue, g.units AS previousUnits,
       g.exterior AS previousExterior,g.interior AS previousInterior,g.last_date AS progressDate,
       CASE WHEN ? OR g.author_id=? THEN g.notes ELSE '' END AS progressNotes,
+      ${floorEvidenceComplete('w.id','COALESCE(g.first_date,p.evidence_from,visit.day)','visit.day')} AS floorReady,
       COUNT(DISTINCT upper(trim(e.asset_code))) AS units,
       COUNT(e.id)<>COUNT(DISTINCT upper(trim(e.asset_code))) AS duplicateEvidence,
       CASE WHEN COUNT(e.id)=COUNT(DISTINCT upper(trim(e.asset_code))) THEN COALESCE(SUM(e.exterior),0) ELSE 0 END AS exterior,
       CASE WHEN COUNT(e.id)=COUNT(DISTINCT upper(trim(e.asset_code))) THEN COALESCE(SUM(e.interior),0) ELSE 0 END AS interior
     FROM work_sites w LEFT JOIN work_plan_cycles p ON p.site_id=w.id
     LEFT JOIN work_progress g ON g.site_id=w.id
-    LEFT JOIN charger_evidence e ON e.site_id=w.id AND e.work_date BETWEEN COALESCE(g.first_date,p.evidence_from,?) AND ?
-      AND (g.site_id IS NOT NULL OR ? OR e.author_id=?)
+    CROSS JOIN (SELECT ? AS day) visit
+    LEFT JOIN charger_evidence e ON e.site_id=w.id AND e.work_date BETWEEN COALESCE(g.first_date,p.evidence_from,visit.day) AND visit.day
+      AND (p.site_id IS NOT NULL OR g.site_id IS NOT NULL OR ? OR e.author_id=?)
     WHERE w.id=? AND (? OR p.worker_email=?) GROUP BY w.id
-  `).bind(admin,account.id,day,day,admin,account.id,siteId,admin,account.email).first();
+  `).bind(admin,account.id,day,admin,account.id,siteId,admin,account.email).first();
   if (!row) throw new context.HttpError(404, '배정된 현장을 찾을 수 없습니다.');
   const draft = await db.prepare('SELECT data,updated_at AS updatedAt FROM work_report_drafts WHERE site_id=? AND work_date=? AND author_id=?')
     .bind(siteId,day,account.id).first();
@@ -140,7 +152,7 @@ export async function savePartialWork(db, body, account, context) {
     WHERE w.id=? AND ? < COALESCE(g.planned_units,w.planned_units)
       AND ((p.site_id IS NULL AND ?) OR ((? OR p.worker_email=?) AND ?>=p.next_due))
       AND (? OR EXISTS (SELECT COUNT(*) FROM charger_evidence e WHERE e.site_id=w.id
-        AND e.work_date BETWEEN COALESCE(g.first_date,p.evidence_from,?) AND ? AND (g.site_id IS NOT NULL OR e.author_id=?)
+        AND e.work_date BETWEEN COALESCE(g.first_date,p.evidence_from,?) AND ? AND (p.site_id IS NOT NULL OR g.site_id IS NOT NULL OR e.author_id=?)
         HAVING COUNT(*)=COUNT(DISTINCT upper(trim(e.asset_code)))
           AND COUNT(*)>=? AND COALESCE(SUM(e.exterior),0)>=? AND COALESCE(SUM(e.interior),0)>=?))
       AND NOT EXISTS (SELECT 1 FROM charger_evidence e WHERE e.site_id=w.id

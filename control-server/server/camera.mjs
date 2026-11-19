@@ -1,4 +1,5 @@
 import { archivedPhotoDb } from './operational-data.mjs';
+import { floorPlanTotal, managedFloor } from './worker-field.mjs';
 const cameraSlots = ['exteriorBefore', 'exteriorAfter', 'interiorBefore', 'interiorAfter'];
 const cameraUuid = value => typeof value === 'string' && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
 const cameraText = value => typeof value === 'string' ? value.trim() : '';
@@ -92,22 +93,33 @@ function validJpegStructure(bytes) {
   return false;
 }
 
-const cameraWithinAssignedQuantity = `
-  EXISTS (SELECT 1 FROM work_camera_photos old WHERE old.site_id=w.id AND old.asset_code=? AND (old.author_id=? OR old.evidence_id IS NOT NULL)
-    AND old.work_date>=COALESCE((SELECT first_date FROM work_progress WHERE site_id=w.id),
-      (SELECT evidence_from FROM work_plan_cycles WHERE site_id=w.id),?))
-  OR (
-    SELECT COUNT(DISTINCT asset_code) FROM (
-      SELECT asset_code FROM work_camera_photos WHERE site_id=w.id AND (author_id=? OR evidence_id IS NOT NULL)
-        AND work_date>=COALESCE((SELECT first_date FROM work_progress WHERE site_id=w.id),
-          (SELECT evidence_from FROM work_plan_cycles WHERE site_id=w.id),?)
-      UNION
-      SELECT asset_code FROM charger_evidence WHERE site_id=w.id
-        AND work_date>=COALESCE((SELECT first_date FROM work_progress WHERE site_id=w.id),
-          (SELECT evidence_from FROM work_plan_cycles WHERE site_id=w.id),?)
-    )
-  ) < COALESCE((SELECT planned_units FROM work_progress WHERE site_id=w.id),w.planned_units,0)
+const bucketMatch = alias => `(CASE WHEN b.managed_zone IS NOT NULL THEN ${alias}.zone_id=b.managed_zone
+  ELSE NOT (${managedFloor('b.site_id',alias+'.zone_id')}) END)`;
+
+const captureBuckets = `
+  WITH requested(site_id,work_date,asset_code,zone_id,author_id) AS (VALUES (?,?,?,?,?)), bucket AS (
+    SELECT q.*,COALESCE(g.first_date,p.evidence_from,q.work_date) AS first_date,
+      z.id AS managed_zone,COALESCE(z.planned_units,COALESCE(g.planned_units,w.planned_units,0)-${floorPlanTotal('w.id')}) AS capacity
+    FROM requested q JOIN work_sites w ON w.id=q.site_id
+    LEFT JOIN work_plan_cycles p ON p.site_id=w.id LEFT JOIN work_progress g ON g.site_id=w.id
+    LEFT JOIN work_zones z ON z.id=q.zone_id AND z.site_id=w.id AND z.deleted_at IS NULL AND z.planned_units IS NOT NULL
+  ), occupied AS (
+    SELECT upper(trim(e.asset_code)) AS asset,e.zone_id,1 AS registered
+    FROM charger_evidence e JOIN bucket b ON e.site_id=b.site_id AND e.work_date>=b.first_date
+    WHERE ${bucketMatch('e')}
+    UNION ALL
+    SELECT upper(trim(c.asset_code)),c.zone_id,0
+    FROM work_camera_photos c JOIN bucket b ON c.site_id=b.site_id AND c.work_date>=b.first_date
+    WHERE c.evidence_id IS NULL AND c.author_id=b.author_id AND ${bucketMatch('c')}
+  )
 `;
+
+const cameraWithinAssignedQuantity = `EXISTS (
+  SELECT 1 FROM bucket b WHERE b.site_id=w.id AND b.work_date>=b.first_date
+    AND (SELECT COUNT(DISTINCT asset) FROM occupied WHERE registered=1)<b.capacity
+    AND ((SELECT COUNT(DISTINCT asset) FROM occupied)<b.capacity
+      OR EXISTS (SELECT 1 FROM occupied WHERE registered=0 AND asset=b.asset_code AND zone_id IS b.zone_id))
+)`;
 
 export async function validateProofJpeg(file, HttpError, decodeJpeg) {
   if (!(file instanceof File) || file.type !== 'image/jpeg' || file.size < 4 || file.size > 1_200_000) {
@@ -241,11 +253,11 @@ export async function handleCameraWork(path, request, env, account, admin, conte
         INSERT INTO work_zones(id,site_id,name,created_at,created_by)
         SELECT ?,w.id,?,?,? FROM work_sites w WHERE w.id = ?
           AND (? OR EXISTS (SELECT 1 FROM work_plans p WHERE p.site_id = w.id AND p.worker_email = ?))
-        ON CONFLICT(site_id,name) DO UPDATE SET deleted_at=NULL WHERE work_zones.deleted_at IS NOT NULL AND (? OR work_zones.planned_units IS NULL)
-      `).bind(crypto.randomUUID(), name, new Date().toISOString(), account.id, siteId, Number(admin), account.email, Number(admin)).run();
+        ON CONFLICT(site_id,name) DO UPDATE SET deleted_at=NULL WHERE work_zones.deleted_at IS NOT NULL AND work_zones.planned_units IS NULL
+      `).bind(crypto.randomUUID(), name, new Date().toISOString(), account.id, siteId, Number(admin), account.email).run();
       const zone = await db.prepare('SELECT id,name FROM work_zones WHERE site_id=? AND name=? AND deleted_at IS NULL')
         .bind(siteId,name).first();
-      if (!zone) throw new HttpError(409, '현장 배정을 다시 확인해 주세요.');
+      if (!zone) throw new HttpError(409, '삭제한 층별 배정은 관리자 층별 설비 메뉴에서 다시 등록해 주세요.');
       return json({ zone });
     }
     const { results } = await db.prepare('SELECT id,name FROM work_zones WHERE site_id=? AND deleted_at IS NULL ORDER BY name')
@@ -320,21 +332,20 @@ export async function handleCameraWork(path, request, env, account, admin, conte
     const existing = await previouslySaved();
     if (existing) return confirmStored(existing);
     await validateWorkZone(db,site,zone,HttpError);
-    const capacity=await db.prepare(`SELECT 1 FROM work_sites w WHERE w.id=? AND (${cameraWithinAssignedQuantity})
-      AND ?>=COALESCE((SELECT first_date FROM work_progress WHERE site_id=w.id),(SELECT evidence_from FROM work_plan_cycles WHERE site_id=w.id),?)`)
-      .bind(site,asset,author,date,author,date,date,date,date).first();
-    if (!capacity) throw new HttpError(409,'배정 설비 수량을 확인해 주세요. 수량을 초과하는 새 충전기 사진은 등록할 수 없습니다.');
+    const capacityArgs=[site,date,asset,zone,author];
+    const capacity=await db.prepare(`${captureBuckets}
+      SELECT 1 FROM work_sites w WHERE w.id=? AND ${cameraWithinAssignedQuantity}`).bind(...capacityArgs,site).first();
+    if (!capacity) throw new HttpError(409,'배정 설비 수량 또는 해당 층의 촬영 한도를 확인해 주세요. 새 충전기의 사진은 기기에 보관됩니다.');
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
     const before = slot.endsWith('After') ? slot.replace('After', 'Before') : null;
     await savePhoto(cameraPhotoKey(id),bytes);
     try {
-      const saved = await db.prepare(`
+      const saved = await db.prepare(`${captureBuckets}
         INSERT INTO work_camera_photos(id,site_id,work_date,asset_code,zone_id,author_id,slot,created_at,upload_id,upload_hash)
         SELECT ?,w.id,?,?,?,?,?,?,?,? FROM work_sites w WHERE w.id = ?
           AND (? OR EXISTS (SELECT 1 FROM work_plans p WHERE p.site_id = w.id AND p.worker_email = ?))
-          AND (${cameraWithinAssignedQuantity})
-          AND ?>=COALESCE((SELECT first_date FROM work_progress WHERE site_id=w.id),(SELECT evidence_from FROM work_plan_cycles WHERE site_id=w.id),?)
+          AND ${cameraWithinAssignedQuantity}
           AND (? IS NULL OR EXISTS (SELECT 1 FROM work_zones z WHERE z.id=? AND z.site_id=w.id AND z.deleted_at IS NULL))
           AND NOT EXISTS (SELECT 1 FROM settlement_months c WHERE c.month = substr(?,1,7))
           AND NOT EXISTS (SELECT 1 FROM field_reports r WHERE r.site_id=w.id AND ? BETWEEN COALESCE(r.progress_from,r.work_date) AND r.work_date AND r.status='approved')
@@ -345,7 +356,7 @@ export async function handleCameraWork(path, request, env, account, admin, conte
           AND (? IS NULL OR EXISTS (SELECT 1 FROM work_camera_photos p WHERE p.site_id = w.id AND p.work_date = ?
             AND p.asset_code = ? AND p.zone_id IS ? AND p.author_id = ? AND p.slot = ? AND p.evidence_id IS NULL))
         ON CONFLICT DO NOTHING
-      `).bind(id, date, asset, zone, author, slot, createdAt, uploadId, uploadHash, site, Number(admin), account.email, asset,author,date,author,date,date,date,date, zone,zone,date,date,
+      `).bind(...capacityArgs,id,date,asset,zone,author,slot,createdAt,uploadId,uploadHash,site,Number(admin),account.email,zone,zone,date,date,
         date, asset, slot, author, before, date, asset, zone, author, before).run();
       if (!saved.meta.changes) {
         await Promise.allSettled([env.BUCKET.delete(cameraPhotoKey(id))]);

@@ -1,3 +1,5 @@
+import { hasReportContribution } from './field-integrity.mjs';
+
 const dayMs = 86_400_000;
 const isoDay = value => new Date(value).toISOString().slice(0, 10);
 
@@ -13,9 +15,11 @@ export function siteFloors(siteAlias) {
 export function planOccursInMonth(nextDue, repeatDays, month, today) {
   if (!nextDue) return '';
   if (nextDue.slice(0, 7) === month) return nextDue;
-  // The current actionable assignment stays in its actual due month. Later
-  // months can show the first projected visit without rewriting the plan.
-  if (month <= today.slice(0, 7) || !repeatDays) return '';
+  // Keep the original due date for carried-over work. Later months can show
+  // the first projected visit without rewriting the plan.
+  const currentMonth=today.slice(0,7);
+  if (month===currentMonth && nextDue<month+'-01') return nextDue;
+  if (month<=currentMonth || !repeatDays) return '';
   const start = Date.parse(month + '-01');
   const due = Date.parse(nextDue);
   if (due > start) return '';
@@ -31,38 +35,45 @@ export async function workerMonthMap(db, account, month, today) {
       COALESCE(NULLIF(p.instructions,''),w.work_note) AS workNote,
       CASE WHEN p.delay_date=p.next_due THEN p.delay_reason ELSE '' END AS delayReason,
       g.units AS progressUnits,
+      (SELECT fr.status FROM field_reports fr WHERE fr.site_id=p.site_id AND fr.assignment_due=p.next_due
+        ORDER BY fr.work_date DESC LIMIT 1) AS currentReportStatus,
       r.id AS reportId,r.status AS reportStatus,r.work_date AS reportDate,
       COALESCE(r.assignment_due,r.work_date) AS reportDue,
       ${siteFloors('w')} AS floorData
     FROM work_sites w
     LEFT JOIN work_plan_cycles p ON p.site_id=w.id AND p.worker_email=?
     LEFT JOIN work_progress g ON g.site_id=p.site_id
-    LEFT JOIN field_reports r ON r.id=(
-      SELECT own.id FROM field_reports own WHERE own.site_id=w.id AND own.author_id=?
-        AND COALESCE(own.assignment_due,own.work_date) LIKE ?
-      ORDER BY COALESCE(own.assignment_due,own.work_date) DESC, own.work_date DESC, own.id DESC LIMIT 1
-    )
+    LEFT JOIN field_reports r ON r.site_id=w.id AND (r.author_id=? OR (r.status='approved' AND ${hasReportContribution('r','?')}))
+      AND (COALESCE(r.assignment_due,r.work_date) LIKE ?
+        OR (? AND r.assignment_due=p.next_due AND p.next_due<?))
     WHERE p.site_id IS NOT NULL OR r.id IS NOT NULL
-    ORDER BY w.name,w.id
-  `).bind(account.email, account.id, month + '-%').all();
-  return results.flatMap(({ floorData, ...row }) => {
-    const due = planOccursInMonth(row.nextDue,row.repeatDays,month,today);
-    const useReport = row.reportDue && (!due || row.reportDue >= due);
-    const dueDate = useReport ? row.reportDue : due;
-    if (!dueDate) return [];
-    const done = useReport && row.reportStatus === 'approved';
-    const delayDays = !done && dueDate < today ? Math.round((Date.parse(today)-Date.parse(dueDate))/dayMs) : 0;
-    return [{
-      id:row.id,name:row.name,address:row.address,lat:row.lat,lng:row.lng,assignee:account.name,
-      dueDate,delayDays,status:done?'done':delayDays?'delayed':'pending',
+    ORDER BY w.name,w.id,r.work_date,r.id
+  `).bind(account.email,account.id,account.id,month+'-%',Number(month===today.slice(0,7)),month+'-01').all();
+  const visits=new Map();
+  function add(row,dueDate,report) {
+    const visitId=row.id+':'+dueDate;
+    if (!dueDate || (!report && visits.has(visitId))) return;
+    const reportStatus=report ? row.reportStatus : dueDate===row.nextDue ? row.currentReportStatus : null;
+    const done=reportStatus==='approved';
+    const awaiting=reportStatus==='submitted';
+    const delayDays=!done && !awaiting && dueDate<today ? Math.round((Date.parse(today)-Date.parse(dueDate))/dayMs) : 0;
+    visits.set(visitId,{
+      id:row.id,visitId,name:row.name,address:row.address,lat:row.lat,lng:row.lng,assignee:account.name,
+      dueDate,delayDays,status:done?'done':awaiting?'review':delayDays?'delayed':'pending',
       delayReason:dueDate===row.nextDue?row.delayReason:'',
-      progressUnits:dueDate===row.nextDue ? row.progressUnits : null,
-      reportId:useReport?row.reportId:null,reportStatus:useReport?row.reportStatus:null,
-      completedDate:done?row.reportDate:null,projected:!useReport&&dueDate!==row.nextDue,
+      progressUnits:dueDate===row.nextDue?row.progressUnits:null,
+      reportId:report?row.reportId:null,reportStatus,
+      completedDate:done?row.reportDate:null,projected:!report && dueDate!==row.nextDue,
+      carriedOver:!done && dueDate.slice(0,7)<month,
       repeatDays:row.repeatDays,workNote:row.nextDue?row.workNote:'',plannedUnits:row.nextDue?row.plannedUnits:null,
-      floors:row.nextDue?JSON.parse(floorData):[],
-    }];
-  });
+      floors:row.nextDue?JSON.parse(row.floorData):[],
+    });
+  }
+  for (const row of results) {
+    add(row,planOccursInMonth(row.nextDue,row.repeatDays,month,today),false);
+    if (row.reportDue) add(row,row.reportDue,true);
+  }
+  return [...visits.values()].sort((a,b)=>a.dueDate.localeCompare(b.dueDate)||a.name.localeCompare(b.name,'ko'));
 }
 
 export async function saveFloorPlan(db, body, account, { HttpError }) {
@@ -75,23 +86,42 @@ export async function saveFloorPlan(db, body, account, { HttpError }) {
     !['included','excluded'].includes(canopy) || !['exterior','interior','both'].includes(scope) || typeof repair!=='boolean') {
     throw new HttpError(400,'층·구역명, 충전기 유형, 수량, 설치 형태와 작업 범위를 모두 확인해 주세요.');
   }
-  const values = [name,units,chargerType,housing,canopy,scope,Number(repair)];
-  const limit = `w.planned_units IS NOT NULL AND ? + COALESCE((SELECT SUM(z.planned_units)
-    FROM work_zones z WHERE z.site_id=w.id AND z.deleted_at IS NULL AND z.id<>?),0)<=w.planned_units`;
-  const zone = zoneId ? await db.prepare(`
+  const values=[name,units,chargerType,housing,canopy,scope,Number(repair)];
+  const proposed=`WITH changed_floor(id,units,charger_type,canopy,scope) AS (
+    VALUES (COALESCE(?,(SELECT id FROM work_zones WHERE site_id=? AND name=?),''),?,?,?,?)
+  ), cycle AS (
+    SELECT MIN(w.planned_units,COALESCE(g.planned_units,w.planned_units)) AS capacity,
+      COALESCE(g.first_date,p.evidence_from) AS first_date,
+      changed_floor.*,
+      changed_floor.units+COALESCE((SELECT SUM(z.planned_units) FROM work_zones z
+        WHERE z.site_id=w.id AND z.deleted_at IS NULL AND z.id<>changed_floor.id),0) AS allocated
+    FROM work_sites w CROSS JOIN changed_floor
+    LEFT JOIN work_progress g ON g.site_id=w.id LEFT JOIN work_plan_cycles p ON p.site_id=w.id
+    WHERE w.id=?
+  )`;
+  const proposedArgs=[zoneId||null,siteId,name,units,chargerType,canopy,scope,siteId];
+  const limit=`EXISTS (SELECT 1 FROM cycle cfg WHERE cfg.allocated<=cfg.capacity
+    AND NOT EXISTS (SELECT 1 FROM charger_evidence e WHERE e.site_id=? AND e.zone_id=cfg.id AND e.work_date>=cfg.first_date
+      AND (e.charger_type<>cfg.charger_type OR e.canopy<>cfg.canopy OR e.exterior<>(cfg.scope<>'interior') OR e.interior<>(cfg.scope<>'exterior')))
+    AND (SELECT COUNT(DISTINCT upper(trim(e.asset_code))) FROM charger_evidence e
+      WHERE e.site_id=? AND e.zone_id=cfg.id AND e.work_date>=cfg.first_date)<=cfg.units
+    AND (SELECT COUNT(DISTINCT upper(trim(e.asset_code))) FROM charger_evidence e
+      WHERE e.site_id=? AND e.work_date>=cfg.first_date AND e.zone_id IS NOT cfg.id
+        AND NOT (${managedFloor('e.site_id','e.zone_id')}))<=cfg.capacity-cfg.allocated)`;
+  const zone = zoneId ? await db.prepare(`${proposed}
     UPDATE work_zones SET name=?,planned_units=?,charger_type=?,housing=?,canopy_scope=?,cleaning_scope=?,repair=?
-    WHERE id=? AND site_id=? AND deleted_at IS NULL AND EXISTS(SELECT 1 FROM work_sites w WHERE w.id=? AND ${limit})
+    WHERE id=? AND site_id=? AND deleted_at IS NULL AND ${limit}
       AND NOT EXISTS(SELECT 1 FROM work_zones z WHERE z.site_id=? AND z.name=? AND z.id<>?)
     RETURNING id
-  `).bind(...values,zoneId,siteId,siteId,units,zoneId,siteId,name,zoneId).first() : await db.prepare(`
+  `).bind(...proposedArgs,...values,zoneId,siteId,siteId,siteId,siteId,siteId,name,zoneId).first() : await db.prepare(`${proposed}
     INSERT INTO work_zones(id,site_id,name,planned_units,charger_type,housing,canopy_scope,cleaning_scope,repair,created_at,created_by)
     SELECT ?,w.id,?,?,?,?,?,?,?,?,? FROM work_sites w WHERE w.id=? AND ${limit}
     ON CONFLICT(site_id,name) DO UPDATE SET deleted_at=NULL,planned_units=excluded.planned_units,
       charger_type=excluded.charger_type,housing=excluded.housing,canopy_scope=excluded.canopy_scope,
       cleaning_scope=excluded.cleaning_scope,repair=excluded.repair WHERE work_zones.deleted_at IS NOT NULL
     RETURNING id
-  `).bind(crypto.randomUUID(),...values,new Date().toISOString(),account.id,siteId,units,'').first();
-  if (!zone) throw new HttpError(409,'중복된 층·구역명이 없는지, 층별 합계가 건물 배정 수량 이내인지 확인해 주세요.');
+  `).bind(...proposedArgs,crypto.randomUUID(),...values,new Date().toISOString(),account.id,siteId,siteId,siteId,siteId).first();
+  if (!zone) throw new HttpError(409,'구역명과 배정 수량을 확인해 주세요. 이미 저장된 이번 회차 증빙의 층별 수량·작업 범위와 충돌하는 배정은 저장할 수 없습니다.');
   return zone;
 }
 

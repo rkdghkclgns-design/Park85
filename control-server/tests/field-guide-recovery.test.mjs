@@ -65,10 +65,11 @@ function harness({local=storage(),server={instructions:'기존 현장 안내',ve
     guide.setModel({sites:[{id:'site',name:'현장',nextDue:assignmentDue,plannedUnits:2,instructions:server.instructions,...overrides}],evidence:[]});
   };
   setModel();
-  async function action(id) {
-    const button={dataset:{guideAction:id},disabled:false,closest(){return this;}};
+  async function click(dataset) {
+    const button={dataset,disabled:false,closest(){return this;}};
     await listeners.get('click')({target:button});
   }
+  const action=id=>click({guideAction:id});
   function edit(name,value) {
     form.elements[name].value=value;form.dispatchEvent(new Event('input'));listeners.get('input')({target:form.elements[name]});
   }
@@ -76,10 +77,38 @@ function harness({local=storage(),server={instructions:'기존 현장 안내',ve
     form.elements.zoneId.value='zone-a';draft.restore();form.elements.guide_access.checked=true;
     edit('chargerType','slow');edit('issue','보존할 작업 메모');photos.set(context(),['Before','After']);
   }
-  return {guide,form,draft,workflow,local,server,photos,resets,requests,action,edit,prepareProof,setModel,
+  return {guide,form,draft,workflow,local,server,photos,resets,requests,action,click,edit,prepareProof,setModel,
     flow:()=>JSON.parse(local.getItem(draft.scope+'flow')),step:()=>root.querySelector('.guide-header').querySelector('[data-guide-title]').textContent,
     confirm:()=>{root.querySelector('[data-guide-site]').querySelector('[data-guide-confirm]').checked=true;},close:()=>signal.abort()};
 }
+
+test('entering internal capture from the exterior photo stage requires current isolation confirmation',async()=>{
+  const h=harness();
+  await h.guide.selectSite('site');
+  await h.action('continue');
+  h.prepareProof();
+  await h.action('to-before');
+  const fields=h.form.elements;
+  h.workflow.safetyValid=()=>fields.guide_access.checked && (!fields.interior.checked || fields.guide_isolation.checked);
+  assert.equal(h.guide.canCapture('exteriorBefore'),true);
+  fields.interior.checked=true;
+  assert.equal(h.guide.canCapture('interiorBefore'),false);
+  assert.equal(h.step(),'현장 안전 수칙 확인');
+  fields.guide_isolation.checked=true;
+  await h.action('to-before');
+  assert.equal(h.guide.canCapture('interiorBefore'),true);
+  h.close();
+});
+
+test('the home report shortcut uses the latest evidence day across a month boundary',async()=>{
+  const h=harness();
+  const workDate='2026-10-31';
+  h.setModel({nextDue:'2026-10-28',latestEvidenceDate:workDate});
+  h.server.assignmentDue='2026-10-28';
+  await h.click({guideReport:'site'});
+  assert.equal(h.flow().workDate,workDate);
+  h.close();
+});
 
 test('changed work date restores the same charger, zone, notes and photo stage after a restart',async()=>{
   const first=harness();await first.guide.selectSite('site');await first.action('continue');

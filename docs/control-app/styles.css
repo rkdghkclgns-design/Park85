@@ -232,7 +232,8 @@ td.table-empty { padding: 12px; text-align: center; color: var(--muted); }
 }
 .report-completion[data-state="partial"] { background: #fff7e9; border-color: #ebcb8d; }
 .report-completion[data-state="full"] { background: var(--brand-pale); border-color: #a6d2c8; }
-.report-completion[data-state="missing"], .report-completion[data-state="excess"] {
+.report-completion[data-state="missing"], .report-completion[data-state="excess"],
+.report-completion[data-state="floor-mismatch"] {
   background: #fff1f1; border-color: #efb9b4;
 }
 .report-completion > strong { font-size: 17px; }
@@ -267,11 +268,14 @@ td.table-empty { padding: 12px; text-align: center; color: var(--muted); }
 .work-status.worker-delayed i { background: #c33232; }
 .work-status.worker-done { color: #116650; }
 .work-status.worker-done i { background: #158060; }
+.work-status.worker-review { color: #245db0; }
+.work-status.worker-review i { background: #245db0; }
 [data-managed-floor] [data-legacy-floor-fields], [data-floor-choice-required] [data-start-camera] { display: none; }
 @media (prefers-color-scheme: dark) {
   .work-status.worker-pending { color: #f2ca5b; }
   .work-status.worker-delayed { color: #ff9b93; }
   .work-status.worker-done { color: #87d4b7; }
+  .work-status.worker-review { color: #91b9ff; }
 }
 .guide-site-button:hover { border-color: var(--accent, #226656); }
 .guide-site-details dd { font-size: 1rem; overflow-wrap: anywhere; }

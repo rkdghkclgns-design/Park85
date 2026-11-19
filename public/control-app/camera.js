@@ -63,7 +63,7 @@ async function frameJpeg(video) {
     : reject(new Error('사진을 저장할 수 없습니다. 다시 촬영해 주세요.')), 'image/jpeg', 0.84));
 }
 
-export function mountCamera(evidence, api, signal, notify, onModeChange, userId, draft, afterZoneRename) {
+export function mountCamera(evidence, api, signal, notify, onModeChange, userId, draft, afterZoneRename, canCapture = () => true) {
   const dialog = evidence.querySelector('[data-camera-dialog]');
   const camera = evidence.querySelector('[data-camera-fields]');
   const video = dialog.querySelector('video');
@@ -311,6 +311,8 @@ export function mountCamera(evidence, api, signal, notify, onModeChange, userId,
 
   async function openCamera(slot) {
     draft.restore();
+    onModeChange();
+    if (!canCapture(slot)) return;
     const fields = context();
     for (const [name, message] of [['siteId', '증빙 현장을 선택해 주세요.'], ['workDate', '증빙 작업일을 확인해 주세요.']]) {
       const field = evidence.elements[name];
@@ -406,6 +408,10 @@ export function mountCamera(evidence, api, signal, notify, onModeChange, userId,
         const captureOpening = opening;
         try {
           const { fields, slot } = current;
+          if (draftKey(fields)!==draftKey(context()) || !canCapture(slot)) {
+            dialog.close();
+            return;
+          }
           const key = draftKey(fields);
           const count = [...(serverDrafts.get(key) || []), ...localPhotos(fields)].filter(photo => photo.slot === slot).length;
           if (count >= 6) throw new Error('한 항목에 6장까지 촬영할 수 있습니다.');
@@ -475,6 +481,7 @@ export function mountCamera(evidence, api, signal, notify, onModeChange, userId,
   return {
     usesFiles,
     selectZone: refreshZones,
+    close() { if (dialog.open) dialog.close(); stop(); },
     missingSlot(phase) {
       const photos = [...(serverDrafts.get(draftKey(context())) || []),...localPhotos(context())];
       return Object.keys(cameraLabels).find(slot => slot.endsWith(phase)

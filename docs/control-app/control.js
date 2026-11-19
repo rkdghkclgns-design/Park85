@@ -481,7 +481,7 @@ export function mountControl(root, account, api, signal) {
     status.classList.toggle('error', error);
   }
   const workflow = mountWorkflows(root,admin,currentDay,api,signal,notify,refresh,account.id,admin ? null : {
-    onModel:data=>guide.setModel(data), canSave:data=>guide.canSave(data), onSaved:(siteId,date)=>guide.evidenceSaved(siteId,date),
+    onModel:data=>guide.setModel(data), canSave:data=>guide.canSave(data), canCapture:slot=>guide.canCapture(slot), onSaved:(siteId,date)=>guide.evidenceSaved(siteId,date),
   });
   const guide = admin ? null : mountFieldGuide(root,{ today:currentDay,api,signal,notify,workflow,prefillCompletion });
   const refreshTasks = admin ? mountOperationsTasks(root, api, signal) : null;
@@ -626,7 +626,7 @@ export function mountControl(root, account, api, signal) {
       root.querySelector('[data-partial-reports]').innerHTML = data.progress?.length ? `<h3>부분 완료 · 진행중</h3>${data.progress.map(row =>
         `<article class="report-control-row row between"><div><strong>${esc(row.siteName)}</strong>
         <p class="small">${esc(row.workDate)} · 완료 ${row.units} / ${row.plannedUnits}기 · 남은 수량 ${row.plannedUnits - row.units}기</p></div>
-        <button class="btn compact" type="button" data-resume-report="${esc(row.siteId)}" data-work-date="${currentDay}">이어서 완료 보고</button></article>`).join('')}` : '';
+        <button class="btn compact" type="button" data-resume-report="${esc(row.siteId)}" data-work-date="${esc(row.workDate)}">이어서 완료 보고</button></article>`).join('')}` : '';
       guide?.setReports(data.reports);
       if (admin) {
         if (!settingsDirty) {
@@ -727,7 +727,8 @@ export function mountControl(root, account, api, signal) {
     const planned = completionData?.plannedUnits;
     const entered = admin ? fields.units.valueAsNumber : completionData?.units;
     const completed = Number.isInteger(entered) && entered>0 ? entered : 0;
-    const { state,mode,remaining } = completionProgress(planned,completed,completionData?.previousUnits ?? 0);
+    let { state,mode,remaining } = completionProgress(planned,completed,completionData?.previousUnits ?? 0);
+    if (state==='full' && completionData?.floorReady===0) { state='floor-mismatch';mode=''; }
     const count = value => Number(value).toLocaleString('ko-KR') + '기';
     const detail = {
       missing:['이전 완료 수량을 확인해 주세요.',admin
@@ -742,6 +743,7 @@ export function mountControl(root, account, api, signal) {
       partial:['부분 완료 · ' + count(remaining) + ' 남음',admin
         ? '현재 ' + count(completed) + '를 부분 완료로 등록합니다. 전체 완료까지 ' + count(remaining) + ' 남았습니다.'
         : '현재 ' + count(completed) + '를 부분 완료로 등록할 수 있습니다. 전체 완료하려면 남은 ' + count(remaining) + '의 작업 전후 사진과 결과를 저장해 주세요.'],
+      'floor-mismatch':['층별 증빙을 확인해 주세요.','건물 전체 수량은 맞습니다. 층별 배정 수량, 충전기 유형, 캐노피와 청소 범위를 대조해 주세요. 관리자에게 구역 수정을 요청할 수 있습니다.'],
       full:['전체 완료',admin ? '배정된 ' + count(planned) + ' 전체를 완료로 보고합니다.'
         : '배정된 ' + count(planned) + ' 모두 증빙을 저장했습니다. 전체 완료를 등록하면 관리자 확인이 시작됩니다.'],
     };

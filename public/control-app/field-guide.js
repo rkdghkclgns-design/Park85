@@ -73,6 +73,7 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
   let intendedReport = false;
   let backTo;
   let attempt = 0;
+  let selectingFloor = false;
   let restoring=false;
   let restoreAttempted=false;
   let resumeAfterGuidance;
@@ -130,7 +131,7 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
   function drawLists() {
     const item = row => {
       const status = sitePriority(row,today);
-      const hasProof=row.progressUnits || row.floorProgress?.some(g=>g.completed) || savedEvidence.some(e=>e.siteId===row.id && e.workDate>=row.nextDue);
+      const hasProof=row.latestEvidenceDate || row.progressUnits || row.floorProgress?.some(g=>g.completed) || savedEvidence.some(e=>e.siteId===row.id && e.workDate>=row.nextDue);
       return `<div class="stack"><button class="guide-site-button" type="button" data-guide-site-id="${esc(row.id)}">
         <span><strong>${esc(row.name)}</strong><small>${esc(row.nextDue)}${row.address ? ' · ' + esc(row.address) : ''}</small></span>
         <span class="work-status ${status.style}"><i></i>${status.label}</span>
@@ -166,7 +167,8 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
         ${site.floors?.length?'':`<div><dt>완료 / 배정</dt><dd>${site.progressUnits || 0} / ${site.plannedUnits == null ? '미등록' : site.plannedUnits + '기'}</dd></div>`}
       </dl>
       ${site.floors?.length?`<h3>층·구역별 배정 설비</h3>${floorRows(site.floors)}`:''}
-      ${site.currentReportStatus==='revision' ? '<p class="small">보고에 보완 요청이 있습니다. 내 현장 보고에서 내용을 확인할 수 있습니다.</p>' : ''}
+      ${site.revision ? `<div class="stack"><strong>관리자 보완 요청</strong><p class="small">${esc(site.revision.note)}</p>
+        ${site.revision.target ? `<p class="small muted">보완 대상 · ${esc(site.revision.target)}</p>` : ''}</div>` : ''}
       ${status.rank===1 ? `<details class="report-control-row"><summary>지연 사유${site.delayReason ? ' · ' + esc(site.delayReason) : ''}</summary>
         <form class="row" data-work="delay" data-site="${esc(site.id)}" data-due="${esc(site.nextDue)}">
           <label class="field grow"><span>지연 사유</span><input name="reason" maxlength="500" value="${esc(site.delayReason || '')}"></label>
@@ -234,11 +236,16 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
     const floor=floorId===undefined
       ? floors.find(item=>floorUnitsSaved(item.id)<item.units)
       : floors.find(item=>item.id===floorId);
-    await workflow.setEvidenceSite(site.id,workDate,floor?.id,floor?.name);
-    if (signal.aborted || token!==attempt || site?.id!==selectedSite.id
-      || site.nextDue!==selectedSite.nextDue || workDate!==selectedDate) return;
-    if (floorId!==undefined) workflow.resetSafety();
-    show('setup');
+    selectingFloor=true;
+    try {
+      await workflow.setEvidenceSite(site.id,workDate,floor?.id,floor?.name);
+      if (signal.aborted || token!==attempt || site?.id!==selectedSite.id
+        || site.nextDue!==selectedSite.nextDue || workDate!==selectedDate) return;
+      if (floorId!==undefined) workflow.resetSafety();
+      show('setup');
+    } finally {
+      selectingFloor=false;
+    }
   }
 
   async function restoreWork() {
@@ -394,7 +401,7 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
       if (checkPhotos('After')) show('results');
     },
 
-    remaining:startInspection,
+    remaining() { workDate=today;return startInspection(); },
     report:openReport,
   };
 
@@ -407,7 +414,10 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
     button.disabled=true;
     try {
       if (action) await action();
-      else if (button.dataset.guideReport) await selectSite(button.dataset.guideReport,today,true);
+      else if (button.dataset.guideReport) {
+        const target=sites.find(row=>row.id===button.dataset.guideReport);
+        if (target) await selectSite(target.id,target.revision?.workDate || target.latestEvidenceDate || target.progressDate || today,true);
+      }
       else if (button.dataset.guideSiteId) await selectSite(button.dataset.guideSiteId);
     } catch (error) {
       if (!signal.aborted) notify(error.message,true);
@@ -451,7 +461,8 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
       }
       if (updated) {
         const changed = updated.delayReason!==site.delayReason || updated.progressUnits!==site.progressUnits
-          || updated.currentReportStatus!==site.currentReportStatus || JSON.stringify(updated.floors)!==JSON.stringify(site.floors)
+          || updated.currentReportStatus!==site.currentReportStatus || JSON.stringify(updated.revision)!==JSON.stringify(site.revision)
+          || JSON.stringify(updated.floors)!==JSON.stringify(site.floors)
           || JSON.stringify(updated.floorProgress)!==JSON.stringify(site.floorProgress);
         const knownInstructions=guidance?.instructions ?? (site.instructions || site.siteNote || '');
         const guidanceChanged=knownInstructions!==(updated.instructions || updated.siteNote || '');
@@ -466,6 +477,23 @@ export function mountFieldGuide(root,{ today,api,signal,notify,workflow,prefillC
         } else if (changed && step==='site') drawSite();
         else if (step==='before' || step==='results') drawFloorSelection();
       }
+    },
+    canCapture(slot) {
+      if (restoring || selectingFloor || !['before','after','results'].includes(step) || !guidance?.confirmedAt
+        || evidence.elements.siteId.value!==site?.id) return false;
+      const scope=slot.startsWith('interior')?'interior':'exterior';
+      if (!evidence.elements[scope].checked) return false;
+      if (!workflow.safetyValid()) {
+        show('setup');
+        workflow.checkSafety();
+        return false;
+      }
+      if (!workflow.setupValid()) {
+        show('before');
+        workflow.checkSetup();
+        return false;
+      }
+      return true;
     },
     canSave(data) {
       if (step!=='results' || data.siteId!==site?.id || !guidance?.confirmedAt) return false;

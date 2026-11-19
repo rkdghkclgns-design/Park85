@@ -3,6 +3,7 @@ import { validMailbox } from './addresses.mjs';
 import { archivedDetailDb, readTestArchive } from './operational-data.mjs';
 import { clientRecipients, clientRecipientsSql, finalClientReportSql, legacyClientPolicy, normalizeClientRecipients } from './client-recipients.mjs';
 import { displayWorkResults, normalizeWorkResults } from './work-results.mjs';
+import { floorEvidenceComplete, hasReportContribution, proofInReport } from './field-integrity.mjs';
 import { internalWorkUnits, readReportDraftList, readWorkerEarnings, saveReportDraft, savePartialWork, workerCanMoveEvidenceZone } from './progress.mjs';
 
 const controlDate = timestamp => new Date(timestamp + 9 * 3600_000).toISOString().slice(0, 10);
@@ -30,6 +31,23 @@ export function portalDetailUrl(env, kind, id, day) {
 const detailLink = (env, kind, id, text, day) => id
   ? { text, href: portalDetailUrl(env, kind, id, day) } : text;
 
+const contributionReport = (r,viewer) => `(${r}.author_id=${viewer} OR
+  (${r}.status='approved' AND ${hasReportContribution(r,viewer)}))`;
+
+const contributionCounts = (r,viewer) => `CASE WHEN ${r}.author_id<>${viewer} THEN (
+  SELECT json_object('units',COUNT(*),'exterior',COALESCE(SUM(e.exterior),0),'interior',COALESCE(SUM(e.interior),0),
+                     'internalUnits',COALESCE(SUM(e.internal_work),0))
+  FROM charger_evidence e WHERE ${proofInReport('e',r)} AND e.author_id=${viewer}
+) END AS contributionCounts`;
+
+function visibleReport(row,account) {
+  const {contributionCounts,...report}=row;
+  if (!contributionCounts) return report;
+  const counts=JSON.parse(contributionCounts);
+  return { ...report,...counts,authorId:account.id,authorName:account.name,
+    plannedUnits:null,internalWork:counts.internalUnits===counts.units,notes:'',reviewNote:'',revisionTarget:'',revisionEvidenceId:'',revisionPhotoId:'' };
+}
+
 async function readControlOverview(db, month, account, env) {
   const admin = canManageReports(account);
   const sitesQuery = admin ? `
@@ -45,14 +63,16 @@ async function readControlOverview(db, month, account, env) {
     delete site.contractor_emails;
   }
   const fields = admin ? ', r.region_name AS region, r.contract_price AS contractPrice, r.worker_price AS workerPrice' : '';
-  const restriction = admin ? '' : ' AND r.author_id = ?';
-  const args = admin ? [month + '-%'] : [month + '-%', account.id];
+  const viewer = admin ? '' : 'CROSS JOIN (SELECT ? AS id) viewer';
+  const restriction = admin ? '' : ' AND '+contributionReport('r','viewer.id');
+  const contribution = admin ? '' : ', '+contributionCounts('r','viewer.id');
+  const args = admin ? [month+'-%'] : [account.id,month+'-%'];
   const reports = (await db.prepare(`
     SELECT r.id, r.site_id AS siteId, r.site_name AS siteName, r.work_date AS workDate,
            r.author_id AS authorId, r.author_name AS authorName, r.units, r.exterior, r.interior, r.notes, r.status,
            r.completion_reported_at AS completionReportedAt,r.planned_units AS plannedUnits,r.internal_work AS internalWork,r.internal_units AS internalUnits,
-           r.review_note AS reviewNote, r.revision_target AS revisionTarget${fields}
-    FROM field_reports r WHERE r.work_date LIKE ?${restriction} ORDER BY r.work_date DESC, r.site_name
+           r.review_note AS reviewNote, r.revision_target AS revisionTarget${fields}${contribution}
+    FROM field_reports r ${viewer} WHERE r.work_date LIKE ?${restriction} ORDER BY r.work_date DESC, r.site_name
   `).bind(...args).all()).results;
   const [{ results: progress }, drafts] = await Promise.all([
     db.prepare(`SELECT g.site_id AS siteId,w.name AS siteName,g.last_date AS workDate,g.units,g.planned_units AS plannedUnits,g.author_name AS authorName
@@ -60,7 +80,7 @@ async function readControlOverview(db, month, account, env) {
       WHERE ? OR p.worker_email=? ORDER BY g.updated_at DESC`).bind(Number(admin),account.email).all(),
     readReportDraftList(db,account),
   ]);
-  if (!admin) return { sites, reports, progress, drafts,earnings:await readWorkerEarnings(db,month,account) };
+  if (!admin) return { sites, reports:reports.map(row=>visibleReport(row,account)), progress, drafts,earnings:await readWorkerEarnings(db,month,account) };
   const regions = (await db.prepare('SELECT region_name AS name FROM charger_regions ORDER BY region_name').all()).results;
   const [{ results: deliveries }, gmailRunner, mailSettings, { results: workers }] = await Promise.all([
     db.prepare(`
@@ -125,13 +145,16 @@ async function submitFieldReport(db, body, account, { HttpError, validDate, kore
       COALESCE(g.planned_units,w.planned_units),COALESCE(g.first_date,p.evidence_from,?),?,
       MIN(?,COALESCE((SELECT SUM(e.internal_work) FROM charger_evidence e
         WHERE e.site_id=w.id AND e.work_date BETWEEN COALESCE(g.first_date,p.evidence_from,?) AND ?),?))
-    FROM work_sites w LEFT JOIN work_plan_cycles p ON p.site_id = w.id LEFT JOIN work_progress g ON g.site_id=w.id WHERE w.id = ?
+    FROM work_sites w LEFT JOIN work_plan_cycles p ON p.site_id = w.id LEFT JOIN work_progress g ON g.site_id=w.id
+    CROSS JOIN (SELECT ? AS day) visit WHERE w.id = ?
       AND (COALESCE(g.planned_units,w.planned_units) IS NULL OR ?=COALESCE(g.planned_units,w.planned_units))
       AND (g.site_id IS NULL OR (? >= g.last_date AND ?>=g.exterior AND ?>=g.interior))
-      AND ((? AND 0) OR EXISTS (
-        SELECT COUNT(*) FROM charger_evidence e WHERE e.site_id=w.id AND e.work_date BETWEEN COALESCE(g.first_date,p.evidence_from,?) AND ?
-          AND (g.site_id IS NOT NULL OR e.author_id=?)
-        HAVING COUNT(*)=COUNT(DISTINCT upper(trim(e.asset_code))) AND COUNT(*)=? AND COALESCE(SUM(e.exterior),0)=? AND COALESCE(SUM(e.interior),0)=?))
+      AND EXISTS (
+        SELECT COUNT(*) FROM charger_evidence e WHERE e.site_id=w.id
+          AND e.work_date BETWEEN COALESCE(g.first_date,p.evidence_from,visit.day) AND visit.day
+          AND (p.site_id IS NOT NULL OR g.site_id IS NOT NULL OR e.author_id=?)
+        HAVING COUNT(*)=COUNT(DISTINCT upper(trim(e.asset_code))) AND COUNT(*)=? AND COALESCE(SUM(e.exterior),0)=? AND COALESCE(SUM(e.interior),0)=?)
+      AND ${floorEvidenceComplete('w.id','COALESCE(g.first_date,p.evidence_from,visit.day)','visit.day')}
       AND NOT EXISTS (SELECT 1 FROM settlement_months WHERE month = substr(?, 1, 7))
       AND ((p.site_id IS NULL AND ?) OR ((? OR p.worker_email = ?) AND ? >= p.next_due
         AND NOT EXISTS (SELECT 1 FROM field_reports r WHERE r.site_id = w.id
@@ -143,13 +166,14 @@ async function submitFieldReport(db, body, account, { HttpError, validDate, kore
       status = 'submitted', review_note = '', revision_evidence_id='', revision_photo_id='', revision_target='',
       updated_at = excluded.updated_at, history_actor=excluded.history_actor,
       planned_units=excluded.planned_units,progress_from=excluded.progress_from,internal_work=excluded.internal_work,internal_units=excluded.internal_units
-    WHERE field_reports.author_id = excluded.author_id AND field_reports.status <> 'approved'
+    WHERE (field_reports.author_id = excluded.author_id AND field_reports.status <> 'approved')
+      OR (field_reports.status='revision' AND field_reports.assignment_due=excluded.assignment_due)
   `).bind(crypto.randomUUID(), workDate, account.id, account.name || '본연 작업자',
     units, exterior, interior, notes, submittedAt, account.role === 'cleaner' ? submittedAt : null, account.name || account.email,
-    workDate,internal,units,workDate,workDate,internal*units,siteId,
-    units,workDate,exterior,interior,Number(canManageReports(account)),workDate,workDate,account.id,units,exterior,interior,workDate,
+    workDate,internal,units,workDate,workDate,internal*units,workDate,siteId,
+    units,workDate,exterior,interior,account.id,units,exterior,interior,workDate,
     Number(canManageReports(account)), Number(canManageReports(account)), account.email, workDate, workDate).run();
-  if (!result.meta.changes) throw new HttpError(409, '배정 수량과 예정일을 확인해 주세요. 일부만 끝난 경우 부분 완료로 등록해 주세요. 중복·승인·마감된 보고는 제출할 수 없습니다.');
+  if (!result.meta.changes) throw new HttpError(409, '층별 배정 수량·작업 범위와 실제 증빙이 일치하는지 확인해 주세요. 일부만 끝난 경우 부분 완료로 등록해 주세요. 중복·승인·마감된 보고는 제출할 수 없습니다.');
 }
 
 async function reviewFieldReport(db, body, account, { HttpError }) {
@@ -204,12 +228,13 @@ async function reviewFieldReport(db, body, account, { HttpError }) {
     WHERE id = ? AND status = ?
       AND NOT EXISTS (SELECT 1 FROM settlement_months WHERE month = substr(report.work_date, 1, 7))
       AND (? = 'approved' OR (
-        SELECT COUNT(*)=COUNT(DISTINCT upper(trim(e.asset_code))) AND COUNT(*) = report.units AND COALESCE(SUM(e.exterior), 0) = report.exterior
+        ${floorEvidenceComplete('report.site_id','COALESCE(report.progress_from,report.work_date)','report.work_date')}
+        AND (SELECT COUNT(*)=COUNT(DISTINCT upper(trim(e.asset_code))) AND COUNT(*) = report.units AND COALESCE(SUM(e.exterior), 0) = report.exterior
           AND COALESCE(SUM(e.interior), 0) = report.interior
-        FROM charger_evidence e WHERE e.site_id = report.site_id AND e.work_date BETWEEN COALESCE(report.progress_from,report.work_date) AND report.work_date
+        FROM charger_evidence e WHERE e.site_id = report.site_id AND e.work_date BETWEEN COALESCE(report.progress_from,report.work_date) AND report.work_date)
       ))
   `).bind(time, time, actor, time, id, expected, expected).run();
-  if (!result.meta.changes) throw new HttpError(409, '승인할 수 없는 상태입니다. 정기 배정 건은 충전기별 증빙 수량이 보고와 일치해야 합니다.');
+  if (!result.meta.changes) throw new HttpError(409, '승인할 수 없는 상태입니다. 건물과 층별 증빙의 수량·작업 범위가 배정 및 보고와 일치해야 합니다.');
 }
 
 function fieldReportLines(row, includeNotes = true) {
@@ -448,10 +473,15 @@ async function readControlDetail(db, kind, id, month, account, context) {
     r.planned_units AS plannedUnits,r.progress_from AS progressFrom,r.internal_work AS internalWork,r.internal_units AS internalUnits,
     r.review_note AS reviewNote, r.revision_target AS revisionTarget, r.revision_evidence_id AS revisionEvidenceId,
     r.revision_photo_id AS revisionPhotoId, r.completion_reported_at AS completionReportedAt`;
+  const viewer = admin ? '' : 'CROSS JOIN (SELECT ? AS id) viewer';
+  const restriction = admin ? '' : ' AND '+contributionReport('r','viewer.id');
+  const contribution = admin ? '' : ', '+contributionCounts('r','viewer.id');
+  const viewerArgs=admin ? [] : [account.id];
   if (kind === 'report') {
-    const report = await db.prepare(`SELECT ${columns} FROM field_reports r WHERE r.id = ? AND (? OR r.author_id = ?)`)
-      .bind(id, Number(admin), account.id).first();
-    if (!report) throw missing();
+    const row = await db.prepare(`SELECT ${columns}${contribution} FROM field_reports r ${viewer} WHERE r.id=?${restriction}`)
+      .bind(...viewerArgs,id).first();
+    if (!row) throw missing();
+    const report=visibleReport(row,account);
     const closed = await db.prepare('SELECT 1 FROM settlement_months WHERE month=?').bind(report.workDate.slice(0,7)).first();
     const { results } = await db.prepare(`
       SELECT e.id,COALESCE('충전기 ' || e.device_number,e.asset_code) AS asset_code,e.charger_type,e.canopy,e.exterior,e.interior,e.safety_checked,e.issue,e.result_detail,e.safety_checklist,
@@ -477,7 +507,8 @@ async function readControlDetail(db, kind, id, month, account, context) {
         SELECT w.name AS title, w.address, CASE WHEN ? OR p.worker_email = ? THEN p.next_due END AS nextDue
         FROM work_sites w LEFT JOIN work_plan_cycles p ON p.site_id = w.id WHERE w.id = ?
           AND (? OR p.worker_email = ?
-            OR EXISTS (SELECT 1 FROM field_reports r WHERE r.site_id = w.id AND r.author_id = ?))
+            OR EXISTS (SELECT 1 FROM field_reports r CROSS JOIN (SELECT ? AS id) viewer
+              WHERE r.site_id=w.id AND ${contributionReport('r','viewer.id')}))
       `).bind(Number(admin), account.email, id, Number(admin), account.email, account.id).first()
     : await db.prepare(`
         SELECT ? AS title, ? AS email WHERE ?=?
@@ -487,18 +518,18 @@ async function readControlDetail(db, kind, id, month, account, context) {
   if (!entity) throw missing();
   const workerEmail = kind === 'worker' ? entity.email : '';
   const filter = kind === 'site' ? 'r.site_id = ?' : `
-    (r.author_id = ? OR (? AND EXISTS (
+    (r.author_id = ? OR (r.status='approved' AND ${hasReportContribution('r','?')}) OR (? AND EXISTS (
       SELECT 1 FROM settlement_payments p, json_each(p.worker_breakdown) w
       WHERE p.report_id = r.id AND json_extract(w.value, '$.email') = ?
     )))`;
-  const args = kind === 'site' ? [id] : [id, Number(admin && Boolean(workerEmail)), workerEmail];
+  const args = kind === 'site' ? [id] : [id, id, Number(admin && Boolean(workerEmail)), workerEmail];
   const { results } = await db.prepare(`
-    SELECT ${columns} FROM field_reports r
-    WHERE r.work_date LIKE ? AND (${filter}) AND (? OR r.author_id = ?)
+    SELECT ${columns}${contribution} FROM field_reports r ${viewer}
+    WHERE r.work_date LIKE ? AND (${filter})${restriction}
     ORDER BY r.work_date DESC, r.site_name, r.id LIMIT 101
-  `).bind(month + '-%', ...args, Number(admin), account.id).all();
+  `).bind(...viewerArgs,month+'-%',...args).all();
   const detail = { title: entity.title, address: entity.address, nextDue: entity.nextDue,
-    reports: results.slice(0, 100), overflow: results.length > 100 };
+    reports: results.slice(0,100).map(row=>visibleReport(row,account)), overflow: results.length > 100 };
   if (kind === 'site' && admin) detail.billing = await readDetailBilling(db, kind, id, month);
   if (kind === 'worker' && workerEmail) {
     const { results: payouts } = await db.prepare(`

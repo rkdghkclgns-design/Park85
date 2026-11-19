@@ -1,17 +1,23 @@
-const cacheName = 'bonyeon-control-shell-v9';
+const cacheName = 'bonyeon-control-shell-v10';
 const files = [
   '', 'index.html', 'styles.css', 'app.js', 'portal-api.js', 'store.js', 'ui.js', 'reports.js', 'monthly.js',
   'operations.js', 'signup.js', 'form-guidance.js', 'regions.js', 'control.js', 'analytics.js', 'workflows.js',
   'camera.js', 'photo-queue.js', 'photo-sync.js', 'evidence-drafts.js', 'evidence-zone.js', 'field-guide.js', 'field-safety.js',
-  'worker-floors.js', 'report-completion.js', 'settlement-export.js', 'public-intake.js',
+  'offline-entry.js', 'worker-floors.js', 'report-completion.js', 'settlement-export.js', 'public-intake.js',
   'navigation.js','control-presentation.js','report-autosave.js','work-recovery.js',
   'mail-preview.js','mail-preview-styles.js','mail-preview.css','photo-thumbnails.js','private-media.js','test-data.js','settlement-reconciliation.js',
   'vendor/leaflet.js', 'vendor/leaflet.css', 'vendor/xlsx.mini.min.js',
 ].map(file => '/control-app/'+file);
 const shellPaths = new Set(files);
-const recovery = () => new Response(null,{status:302,headers:{
-  Location:new URL('/control-app/#control',self.location.origin).href,'Cache-Control':'no-store',
-}});
+async function recovery() {
+  const cache=await caches.open(cacheName);
+  const shell=await cache.match('/control-app/index.html');
+  if (!shell) return new Response(null,{status:302,headers:{Location:'/control-app/#control','Cache-Control':'no-store'}});
+  const html=(await shell.text())
+    .replaceAll(/(href|src)="\.\//g,'$1="/control-app/')
+    .replace('<script type="module" src="/control-app/app.js">','<script src="/control-app/offline-entry.js"></script>\n  <script type="module" src="/control-app/app.js">');
+  return new Response(html,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});
+}
 
 self.addEventListener('install', event => {
   event.waitUntil((async () => {

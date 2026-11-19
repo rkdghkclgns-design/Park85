@@ -273,6 +273,7 @@ function ledgerRows(model, month, today) {
             <fieldset class="stack work-fieldset">
               <legend>실제 작업자별 수량·지급</legend>
               ${row.suggestedWorker ? '<p class="small muted">보고 작성자를 기본값으로 표시했습니다. 실제 작업자를 확인해 주세요.</p>' : ''}
+              ${row.handedOver ? '<p class="small muted">여러 작업자의 증빙이 포함된 보고입니다. 증빙별 작업자를 확인한 뒤 각 작업자의 수량과 지급액을 입력해 주세요.</p>' : ''}
               <p class="small muted">작업자별 수량의 합계를 이 보고의 실작업 ${row.units}기와 맞춰 주세요. 지급 합계는 개인 지급액을 더해 표시합니다.</p>
               <div class="stack" data-payment-workers>${row.workerBreakdown.map(worker => workerPaymentRow(model.workers, today, worker)).join('')}</div>
               <div><button type="button" class="btn compact" data-add-payment-worker>실제 작업자 추가</button></div>
@@ -408,7 +409,8 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
   }
   const draft = evidenceDrafts(evidence,userId,{signal,getAssignmentDue:siteId=>getSite(siteId)?.nextDue || '',
     onError:error=>notify(error.message,true)});
-  const camera = mountCamera(evidence, api, signal, notify, fillPhotoFields, userId, draft, refresh);
+  const camera = mountCamera(evidence, api, signal, notify, fillPhotoFields, userId, draft, refresh,
+    slot=>!evidenceLocked && (!guide || guide.canCapture(slot)));
   function renderDevices() {
     if (!guide) return;
     const floor = assignedFloor();
@@ -428,6 +430,7 @@ export function mountWorkflows(root, admin, today, api, signal, notify, afterPla
 
   async function setEvidenceSite(siteId,workDate,zoneId='',zoneName='') {
     draft.flush();
+    camera.close();
     evidence.elements.siteId.value=siteId;
     evidence.elements.workDate.value=workDate;
     updateDraftButton();

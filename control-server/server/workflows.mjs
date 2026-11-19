@@ -1,3 +1,4 @@
+import { allowsSiteQuantity, hasHandedOverWork } from './field-integrity.mjs';
 import { displayWorkResults, normalizeWorkResults } from './work-results.mjs';
 import { reconcileSettlement } from './settlement-reconciliation.mjs';
 import { archivedEvidenceDb } from './operational-data.mjs';
@@ -45,20 +46,25 @@ async function readWorkflows(db, month, account, admin, ownerEmail) {
     SELECT w.id, w.name, w.address, p.worker_name AS workerName, p.next_due AS nextDue,w.work_note AS siteNote,
            w.planned_units AS configuredUnits,COALESCE(g.planned_units,w.planned_units) AS plannedUnits,g.units AS progressUnits,
            p.start_date AS startDate, p.repeat_days AS repeatDays, p.instructions,
+           g.last_date AS progressDate,
+           (SELECT MAX(e.work_date) FROM charger_evidence e
+             WHERE e.site_id=w.id AND e.work_date>=COALESCE(g.first_date,p.evidence_from,p.next_due)) AS latestEvidenceDate,
            ${siteFloors('w')} AS floorData,
            ${admin ? "'[]'" : `(SELECT json_group_array(json_object('zoneId',counts.zoneId,'completed',counts.units))
              FROM (SELECT e.zone_id AS zoneId, COUNT(DISTINCT e.asset_code) AS units FROM charger_evidence e
-             WHERE e.site_id=w.id AND (g.site_id IS NOT NULL OR e.author_id=?)
-               AND e.work_date>=COALESCE(g.first_date,p.evidence_from,p.next_due) GROUP BY e.zone_id) counts)`} AS floorProgress,
+             WHERE e.site_id=w.id AND e.work_date>=COALESCE(g.first_date,p.evidence_from,p.next_due) GROUP BY e.zone_id) counts)`} AS floorProgress,
            CASE WHEN p.delay_date = p.next_due THEN p.delay_reason ELSE '' END AS delayReason,
            (SELECT r.status FROM field_reports r WHERE r.site_id=w.id AND r.assignment_due=p.next_due
-             ORDER BY r.work_date DESC LIMIT 1) AS currentReportStatus
+             ORDER BY r.work_date DESC LIMIT 1) AS currentReportStatus,
+           (SELECT json_object('workDate',r.work_date,'note',r.review_note,'target',r.revision_target)
+             FROM field_reports r WHERE r.site_id=w.id AND r.assignment_due=p.next_due
+             AND r.status='revision' ORDER BY r.work_date DESC LIMIT 1) AS revisionData
            ${admin ? ', p.worker_email AS workerEmail' : ''}
     FROM work_sites w LEFT JOIN work_plan_cycles p ON p.site_id = w.id LEFT JOIN work_progress g ON g.site_id=w.id
     ${admin ? '' : "WHERE p.worker_email = ?"}
     ORDER BY w.name, w.id
   `);
-  const sites = await (admin ? siteQuery : siteQuery.bind(account.id,account.email)).all();
+  const sites = await (admin ? siteQuery : siteQuery.bind(account.email)).all();
   const photos = await db.prepare(`
     SELECT e.id, e.site_id AS siteId, w.name AS siteName, e.work_date AS workDate, e.asset_code AS assetCode,
            COALESCE('충전기 ' || e.device_number,e.asset_code) AS assetLabel,
@@ -76,8 +82,8 @@ async function readWorkflows(db, month, account, admin, ownerEmail) {
     WHERE e.work_date LIKE ? ${admin ? '' : 'AND e.author_id = ?'}
     ORDER BY e.work_date DESC, w.name, e.asset_code LIMIT 201
   `).bind(Number(admin),account.id,account.email,month + '-%', ...(admin ? [] : [account.id])).all();
-  const data = { sites: sites.results.map(({floorData,floorProgress,...site})=>({ ...site,
-    floors:JSON.parse(floorData),floorProgress:JSON.parse(floorProgress) })), evidence: photos.results.slice(0, 200).map(({ capturedPhotos,safetyChecklist, ...row }) => ({ ...row,
+  const data = { sites: sites.results.map(({floorData,floorProgress,revisionData,...site})=>({ ...site,
+    floors:JSON.parse(floorData),floorProgress:JSON.parse(floorProgress),revision:JSON.parse(revisionData) })), evidence: photos.results.slice(0, 200).map(({ capturedPhotos,safetyChecklist, ...row }) => ({ ...row,
     photos: JSON.parse(capturedPhotos), safetyChecklist:JSON.parse(safetyChecklist), workResults: displayWorkResults(row).items })),
     evidenceOverflow: photos.results.length > 200 };
   if (admin) {
@@ -102,6 +108,12 @@ async function readWorkflows(db, month, account, admin, ownerEmail) {
   return data;
 }
 
+const cycleHasWork = site => `EXISTS (SELECT 1 FROM work_plan_cycles cycle WHERE cycle.site_id=${site} AND (
+  EXISTS (SELECT 1 FROM work_progress g WHERE g.site_id=cycle.site_id)
+  OR EXISTS (SELECT 1 FROM charger_evidence e WHERE e.site_id=cycle.site_id AND e.work_date>=cycle.evidence_from)
+  OR EXISTS (SELECT 1 FROM field_reports r WHERE r.site_id=cycle.site_id AND r.assignment_due=cycle.next_due AND r.status<>'approved')
+))`;
+
 async function saveWorkPlan(db, body, account, ownerEmail, { HttpError, validDate, emailAddress }) {
   const { siteId, startDate, repeatDays } = body ?? {};
   const workerEmail = emailAddress(body?.workerEmail);
@@ -124,8 +136,15 @@ async function saveWorkPlan(db, body, account, ownerEmail, { HttpError, validDat
       repeat_days = excluded.repeat_days, instructions = excluded.instructions, updated_at = excluded.updated_at, history_actor = excluded.history_actor,
       delay_date = CASE WHEN work_plans.start_date = excluded.start_date AND work_plans.repeat_days = excluded.repeat_days
                     THEN work_plans.delay_date ELSE NULL END
+    WHERE (work_plans.start_date=excluded.start_date AND work_plans.repeat_days=excluded.repeat_days)
+      OR NOT ${cycleHasWork('work_plans.site_id')}
   `).bind(startDate, repeatDays, instructions, nowIso(), account.name || account.email, siteId, workerEmail).run();
-  if (!result.meta.changes) throw new HttpError(404, '현장 또는 활성 상태의 청소 작업자를 찾을 수 없습니다.');
+  if (!result.meta.changes) {
+    const existing=await db.prepare(`SELECT 1 FROM work_plans p JOIN members m ON m.email=?
+      WHERE p.site_id=? AND m.role IN ('cleaner','admin') AND m.active=1`).bind(workerEmail,siteId).first();
+    if (existing) throw new HttpError(409,'이번 회차에 증빙 또는 보고가 있습니다. 시작일과 주기를 유지하고 담당자만 변경해 주세요.');
+    throw new HttpError(404, '현장 또는 활성 상태의 청소 작업자를 찾을 수 없습니다.');
+  }
 }
 
 async function saveWorkDelay(db, body, account, admin, { HttpError, validDate, koreaDate }) {
@@ -445,6 +464,7 @@ async function readSettlementLedger(db, month, ownerEmail) {
            COALESCE(p.billing_ref, '') AS billingRef, COALESCE(p.note, '') AS note,
            p.vat, COALESCE(p.worker_breakdown, '[]') AS workerBreakdown,
            m.email AS reportWorkerEmail,m.name AS reportWorkerName,m.role AS reportWorkerRole,
+           ${hasHandedOverWork('r')} AS handedOver,
             COALESCE(p.payment_version, 0) AS paymentVersion,(${incompleteSettlement}) AS closeBlocked
     FROM field_reports r LEFT JOIN settlement_payments p ON p.report_id = r.id
     LEFT JOIN members m ON m.user_id=r.author_id AND m.role IN ('cleaner','admin')
@@ -454,11 +474,11 @@ async function readSettlementLedger(db, month, ownerEmail) {
   if (ownerEmail && !workers.some(worker => worker.email===ownerEmail)) workers.unshift({ email:ownerEmail,name:'본연 관리자',internal:1 });
   return { close, workers, rows: rows.map(row => {
     const workerBreakdown = JSON.parse(row.workerBreakdown);
-    const suggestedWorker = !workerBreakdown.length && row.reportWorkerEmail && row.recordedInternalUnits===0
+    const suggestedWorker = !workerBreakdown.length && !row.handedOver && row.reportWorkerEmail && row.recordedInternalUnits===0
       && row.reportWorkerRole==='cleaner';
     const displayWorkers = suggestedWorker ? [{ email:row.reportWorkerEmail,name:row.reportWorkerName,
       units:row.units,paid:row.paid,paidDate:'' }] : workerBreakdown;
-    return { ...row,workerBreakdown:displayWorkers,suggestedWorker:Boolean(suggestedWorker),internalUnits:internalWorkUnits(row,workerBreakdown) };
+    return { ...row,handedOver:Boolean(row.handedOver),workerBreakdown:displayWorkers,suggestedWorker:Boolean(suggestedWorker),internalUnits:internalWorkUnits(row,workerBreakdown) };
   }) };
 }
 
@@ -492,7 +512,7 @@ async function saveSettlementPayments(db, body, account, ownerEmail, { HttpError
   }
   const expectedVersion = paymentVersion;
   const source = await db.prepare(`
-    SELECT r.units,r.internal_units,r.author_id,m.email,m.name,m.role,p.worker_breakdown,p.paid
+    SELECT r.units,r.internal_units,m.email,m.name,m.role,p.worker_breakdown,p.paid,${hasHandedOverWork('r')} AS handedOver
     FROM field_reports r LEFT JOIN members m ON m.user_id=r.author_id AND m.role IN ('cleaner','admin')
     LEFT JOIN settlement_payments p ON p.report_id=r.id WHERE r.id=?
   `).bind(id).first();
@@ -500,6 +520,9 @@ async function saveSettlementPayments(db, body, account, ownerEmail, { HttpError
   const existingWorkers = JSON.parse(source.worker_breakdown || '[]');
   let requestedWorkers = workers;
   if (requestedWorkers===undefined && existingWorkers.length) requestedWorkers=existingWorkers;
+  if (requestedWorkers===undefined && !existingWorkers.length && paid>0 && source.handedOver) {
+    throw new HttpError(409,'인계한 증빙이 있는 보고는 실제 작업자별 수량과 지급액을 입력해 주세요.');
+  }
   if (requestedWorkers === undefined && !existingWorkers.length && paid>0
     && source.role==='cleaner' && source.internal_units===0) {
     requestedWorkers=[{ email:source.email,units:source.units,paid,paidDate:'' }];
@@ -675,10 +698,11 @@ export async function handleWorkflows(path, request, env, account, context) {
     if (typeof siteId !== 'string' || !siteId || siteId.length > 80 || !Number.isInteger(plannedUnits) || plannedUnits < 1 || plannedUnits > 10000) {
       throw new HttpError(400, '현장과 배정 설비 수량을 1~10,000기 사이로 입력해 주세요.');
     }
-    const result = await db.prepare(`UPDATE work_sites SET planned_units=?,history_actor=? WHERE id=?
-      AND ?>=COALESCE((SELECT SUM(z.planned_units) FROM work_zones z WHERE z.site_id=? AND z.deleted_at IS NULL),0)`)
-      .bind(plannedUnits,account.name || account.email,siteId,plannedUnits,siteId).run();
-    if (!result.meta.changes) throw new HttpError(409,'현장을 확인하고 건물 배정 수량을 층별 합계 이상으로 입력해 주세요.');
+    const result = await db.prepare(`WITH changed(quantity) AS (VALUES (?))
+      UPDATE work_sites SET planned_units=(SELECT quantity FROM changed),history_actor=? WHERE id=?
+      AND ${allowsSiteQuantity('work_sites.id','work_sites.planned_units','(SELECT quantity FROM changed)')}`)
+      .bind(plannedUnits,account.name || account.email,siteId).run();
+    if (!result.meta.changes) throw new HttpError(409,'현장과 배정 수량을 확인해 주세요. 층이나 등록된 증빙보다 작게 줄이거나 확인 중인 보고의 수량을 바꿀 수 없습니다.');
     return json({ ok: true });
   }
   if (path === '/api/work/evidence/result' && method === 'PATCH') {
@@ -707,7 +731,10 @@ export async function handleWorkflows(path, request, env, account, context) {
   if (path === '/api/work/plan' && method === 'DELETE') {
     const { siteId } = (await readJson(request, env)) ?? {};
     if (typeof siteId !== 'string') throw new HttpError(400, '현장을 선택해 주세요.');
-    await db.prepare('DELETE FROM work_plans WHERE site_id = ?').bind(siteId).run();
+    const removed=await db.prepare(`DELETE FROM work_plans WHERE site_id=? AND NOT ${cycleHasWork('work_plans.site_id')}`).bind(siteId).run();
+    if (!removed.meta.changes && await db.prepare('SELECT 1 FROM work_plans WHERE site_id=?').bind(siteId).first()) {
+      throw new HttpError(409,'이번 회차에 등록된 증빙 또는 보고가 있습니다. 담당자를 변경하거나 작업 회차를 마무리해 주세요.');
+    }
     return json({ ok: true });
   }
   if (path === '/api/work/issue' && method === 'PATCH') {
